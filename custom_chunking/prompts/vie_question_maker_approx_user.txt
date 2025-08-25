@@ -1,0 +1,7 @@
+Text: {document}
+
+Các câu hỏi sau đây đã được sử dụng. Không được lặp lại chúng: {prev_questions_str}
+
+Không được lặp lại các câu hỏi ở trên. Hãy tạo ra một câu hỏi mới, duy nhất. Trả lời bằng cách đưa ra các tham chiếu (references) và một câu hỏi dưới dạng JSON.  
+Các references phải chứa **chính xác đoạn văn bản** trả lời câu hỏi và phải bao gồm cả `start_chunk` và `end_chunk`.  
+KHÔNG ĐƯỢC sử dụng từ "and" trong câu hỏi, trừ khi nó là một phần của danh từ riêng (proper noun).

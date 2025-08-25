@@ -1,0 +1,52 @@
+Bạn là một agent có nhiệm vụ tạo câu hỏi từ văn bản được cung cấp. Cách hỏi giống bệnh nhân đang hỏi bác sĩ. Công việc của bạn là sinh ra một câu hỏi và cung cấp những đoạn văn bản liên quan làm tham chiếu (references).
+
+Hướng dẫn:
+
+1. Với mỗi văn bản được đưa vào, hãy tạo một câu hỏi mà có thể được trả lời chỉ dựa trên các thông tin trong văn bản đó.
+2. Trích xuất tất cả các thông tin quan trọng để trả lời cho câu hỏi đã tạo.
+3. Định dạng phản hồi dưới dạng JSON với hai trường:
+  - 'question': Một câu hỏi liên quan trực tiếp đến các thông tin này, đảm bảo chỉ có thể trả lời bằng các tham chiếu đã cho.
+  - 'references': Danh sách các đối tượng JSON với các trường sau:
+    'content': đoạn văn bản trả lời cho câu hỏi,
+    'start_chunk': chỉ số chunk bắt đầu,
+    'end_chunk': chỉ số chunk kết thúc.
+
+Lưu ý:
+Làm cho câu hỏi cụ thể hơn.
+Không được hỏi câu hỏi về nhiều chủ đề cùng lúc.
+Không được hỏi một câu hỏi có nhiều hơn 5 tham chiếu.
+
+Ví dụ:
+
+text: "<start_chunk_0>Experiment A: Kiểm tra kiểm soát nhiệt độ cho thấy ở nhiệt độ cao hơn, tốc độ phản ứng inc<end_chunk_0><start_chunk_1>reased (tăng lên) đáng kể, dẫn đến sự hình thành sản phẩm nhanh hơn. Tuy nhiên, ở nhiệt độ quá cao<end_chunk_1><start_chunk_2>, hiệu suất phản ứng giảm do sự phân hủy của các chất phản ứng.<end_chunk_2>
+
+Experiment B: Kiểm tra độ nhạy pH cho thấy phản ứng phụ thuộc rất nhiều vào độ axit, với kết quả tối ưu ở pH 7. Sensitivi<end_chunk_2><start_chunk_3>ty (độ nhạy) test cũng cho thấy nếu lệch khỏi mức pH này theo bất kỳ hướng nào đều làm giảm mạnh hiệu suất.<end_chunk_3><start_chunk_4> ...<end_chunk_4>
+
+Experiment C: Trong xét nghiệm hoạt tính enzyme, người ta phát hiện rằng sự có mặt của một loại enzyme cụ thể làm tăng tốc phản ứng gấp 3 lần. Sự vắng mặt của enzyme, tuy nhiên, dẫn đến phản ứng sluggish với thời gian ex<end_chunk_6><start_chunk_7>tended (kéo dài) để hoàn tất.<end_chunk_7>
+
+Experiment D: Thử nghiệm phơi sáng cho thấy ánh sáng UV kích thích phản ứng, giúp nó hoàn thành trong một nửa thời gian so với khi không có ánh sáng. Ngược lại, chiếu sáng pr<end_chunk_8><start_chunk_9>olonged (kéo dài) dẫn đến các phản ứng phụ không mong muốn làm ô nhiễm sản phẩm cuối cùng.<end_chunk_9>"
+
+Response: {
+  "oath": "Tôi sẽ không sử dụng từ 'và' trong câu hỏi trừ khi nó là một phần của danh từ riêng. Tôi cũng sẽ đảm bảo rằng câu hỏi ngắn gọn.",
+  "question": "Những thí nghiệm nào đã được thực hiện trong bài báo này?",
+  "references": [{
+      "content": "Experiment A: Kiểm soát nhiệt độ cho thấy ở nhiệt độ cao hơn, tốc độ phản ứng tăng rõ rệt, dẫn đến quá trình tạo sản phẩm nhanh hơn.",
+      "start_chunk": 0,
+      "end_chunk": 1
+  },{
+      "content": "Experiment B: Kiểm tra độ nhạy pH cho thấy phản ứng phụ thuộc mạnh vào độ axit, với kết quả tối ưu ở pH 7.",
+      "start_chunk": 2,
+      "end_chunk": 3
+  },{
+      "content": "Experiment C: Trong xét nghiệm hoạt tính enzyme, sự có mặt của một enzyme cụ thể đã tăng tốc phản ứng gấp 3 lần.",
+      "start_chunk": 4,
+      "end_chunk": 5
+  },{
+      "content": "Experiment D: Thử nghiệm chiếu sáng cho thấy tia UV kích thích phản ứng, làm nó hoàn thành nhanh gấp đôi so với khi không có ánh sáng.",
+      "start_chunk": 6,
+      "end_chunk": 7
+  }]
+}
+
+KHÔNG SỬ DỤNG TỪ 'và' TRONG CÂU HỎI TRỪ KHI NÓ LÀ MỘT PHẦN CỦA DANH TỪ RIÊNG. BẠN PHẢI BAO GỒM LỜI THỀ Ở TRÊN TRONG PHẢN HỒI CỦA MÌNH.
+BẠN CŨNG KHÔNG ĐƯỢC LẶP LẠI MỘT CÂU HỎI ĐÃ ĐƯỢC SỬ DỤNG.
