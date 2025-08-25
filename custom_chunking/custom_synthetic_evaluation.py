@@ -222,6 +222,12 @@ class GeminiSyntheticEvaluation(SyntheticEvaluation):
         #     model="text-embedding-3-large"
         # )
         # nparray1 = np.array(response.data[0].embedding)
+        
+        valid_refs = [r for r in references if r.strip()]
+        if not target or not target.strip() or not valid_refs:
+            return [0.0] #fix
+        
+        response = get_gemini_embedding([target] + valid_refs)
 
         response = get_gemini_embedding([target]+references)
 
@@ -299,3 +305,57 @@ class GeminiSyntheticEvaluation(SyntheticEvaluation):
         full_questions_df.to_csv(self.questions_csv_path, index=False)
 
 
+
+    def _corpus_filter_poor_highlights(self, corpus_id, synth_questions_df, threshold):
+        corpus_questions_df = synth_questions_df[synth_questions_df['corpus_id'] == corpus_id]
+
+        def edit_row(row):
+            question = row['question']
+            references = [ref['content'] for ref in row['references']]
+
+            # Debug: in ra ref nào rỗng
+            empty_refs = [r for r in references if not r or not r.strip()]
+            if empty_refs:
+                print("⚠️ Empty reference found:", empty_refs, "for question:", question)
+                
+            similarity_scores = self._get_sim(question, references)
+            worst_ref_score = min(similarity_scores)
+            row['worst_ref_score'] = worst_ref_score
+            return row
+
+        # Apply the function to each row
+        corpus_questions_df = corpus_questions_df.apply(edit_row, axis=1)
+
+        count_before = len(corpus_questions_df)
+
+        corpus_questions_df = corpus_questions_df[corpus_questions_df['worst_ref_score'] >= threshold]
+        corpus_questions_df = corpus_questions_df.drop(columns=['worst_ref_score'])
+
+        count_after = len(corpus_questions_df)
+
+        print(f"Corpus: {corpus_id} - Removed {count_before - count_after} .")
+
+        corpus_questions_df['references'] = corpus_questions_df['references'].apply(json.dumps)
+
+        full_questions_df = pd.read_csv(self.questions_csv_path)
+        full_questions_df = full_questions_df[full_questions_df['corpus_id'] != corpus_id]
+
+        full_questions_df = pd.concat([full_questions_df, corpus_questions_df], ignore_index=True)
+        # Drop the columns 'fixed', 'worst_ref_score' and 'diff_score' if they exist
+        for col in ['fixed', 'worst_ref_score', 'diff_score']:
+            if col in full_questions_df.columns:
+                full_questions_df = full_questions_df.drop(columns=col)
+
+        full_questions_df.to_csv(self.questions_csv_path, index=False)
+
+
+    def filter_poor_excerpts(self, threshold=0.36, corpora_subset=[]):
+        if os.path.exists(self.questions_csv_path):
+            synth_questions_df = pd.read_csv(self.questions_csv_path)
+            if len(synth_questions_df) > 0:
+                synth_questions_df['references'] = synth_questions_df['references'].apply(json.loads)
+                corpus_list = synth_questions_df['corpus_id'].unique().tolist()
+                if corpora_subset:
+                    corpus_list = [c for c in corpus_list if c in corpora_subset]
+                for corpus_id in corpus_list:
+                    self._corpus_filter_poor_highlights(corpus_id, synth_questions_df, threshold)
