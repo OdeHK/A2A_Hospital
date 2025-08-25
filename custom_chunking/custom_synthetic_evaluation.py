@@ -9,14 +9,14 @@ import numpy as np
 import pandas as pd
 from utils import load_gemini_model, get_gemini_embedding
 from chunking_evaluation.utils import rigorous_document_search
-from chunking_evaluation.evaluation_framework.base_evaluation import BaseEvaluation
-from importlib import resources
+# from chunking_evaluation.evaluation_framework.base_evaluation import BaseEvaluation
+from .custom_base_evaluation import CustomBaseEvaluation
 
 
-class GeminiSyntheticEvaluation(SyntheticEvaluation):
+class GeminiSyntheticEvaluation(CustomBaseEvaluation):
     def __init__(self, corpora_paths, queries_csv_path, chroma_db_path=None):
         # Chỉ khởi tạo những thứ cần thiết từ BaseEvaluation
-        BaseEvaluation.__init__(self, questions_csv_path=queries_csv_path, chroma_db_path=chroma_db_path)  # optional, nếu BaseEvaluation ổn
+        CustomBaseEvaluation.__init__(self, questions_csv_path=queries_csv_path, chroma_db_path=chroma_db_path)  # optional, nếu BaseEvaluation ổn
         self.corpora_paths = corpora_paths
         self.questions_csv_path = queries_csv_path
         self.client = load_gemini_model()  # dùng Gemini client
@@ -52,6 +52,34 @@ class GeminiSyntheticEvaluation(SyntheticEvaluation):
         with open(os.path.join(PROMPT_DIR, "vie_question_maker_approx_user.txt"), "r", encoding="utf-8") as f:
             self.question_maker_approx_user_prompt = f.read()
 
+
+    def _save_questions_df(self):
+        self.synth_questions_df.to_csv(self.questions_csv_path, index=False)
+
+    def _tag_text(self, text):
+        chunk_length = 100
+        chunks = []
+        tag_indexes = [0]
+        start = 0
+        while start < len(text):
+            end = start + chunk_length
+            chunk = text[start:end]
+            if end < len(text):
+                # Find the last space within the chunk to avoid splitting a word
+                space_index = chunk.rfind(' ')
+                if space_index != -1:
+                    end = start + space_index + 1  # Include the space in the chunk
+                    chunk = text[start:end]
+            chunks.append(chunk)
+            tag_indexes.append(end)
+            start = end  # Move start to end to continue splitting
+
+        tagged_text = ""
+        for i, chunk in enumerate(chunks):
+            tagged_text += f"<start_chunk_{i}>" + chunk + f"<end_chunk_{i}>"
+
+        return tagged_text, tag_indexes
+    
     def _extract_question_and_approx_references(self, corpus, document_length=4000, prev_questions=[]):
         if len(corpus) > document_length:
             start_index = random.randint(0, len(corpus) - document_length)
@@ -358,3 +386,67 @@ class GeminiSyntheticEvaluation(SyntheticEvaluation):
                     corpus_list = [c for c in corpus_list if c in corpora_subset]
                 for corpus_id in corpus_list:
                     self._corpus_filter_poor_highlights(corpus_id, synth_questions_df, threshold)
+
+    def filter_duplicates(self, threshold=0.78, corpora_subset=[]):
+        if os.path.exists(self.questions_csv_path):
+            synth_questions_df = pd.read_csv(self.questions_csv_path)
+            if len(synth_questions_df) > 0:
+                synth_questions_df['references'] = synth_questions_df['references'].apply(json.loads)
+                corpus_list = synth_questions_df['corpus_id'].unique().tolist()
+                if corpora_subset:
+                    corpus_list = [c for c in corpus_list if c in corpora_subset]
+                for corpus_id in corpus_list:
+                    self._corpus_filter_duplicates(corpus_id, synth_questions_df, threshold)
+
+
+    def generate_queries_and_excerpts(self, approximate_excerpts=False, num_rounds = -1, queries_per_corpus = 5):
+        self.synth_questions_df = self._get_synth_questions_df()
+
+        rounds = 0
+        while num_rounds == -1 or rounds < num_rounds:
+            for corpus_id in self.corpora_paths:
+                self._generate_corpus_questions(corpus_id, approx=approximate_excerpts, n=queries_per_corpus)
+            rounds += 1
+    def question_ref_filter(self):
+        self.synth_questions_df = self._get_synth_questions_df()
+
+    def _get_synth_questions_df(self):
+        if os.path.exists(self.questions_csv_path):
+            synth_questions_df = pd.read_csv(self.questions_csv_path)
+        else:
+            synth_questions_df = pd.DataFrame(columns=['question', 'references', 'corpus_id'])
+        return synth_questions_df
+    
+    def _generate_corpus_questions(self, corpus_id, approx=False, n=5):
+        with open(corpus_id, 'r') as file:
+            corpus = file.read()
+
+        i = 0
+        while i < n:
+            while True:
+                try:
+                    print(f"Trying Query {i}")
+                    questions_list = self.synth_questions_df[self.synth_questions_df['corpus_id'] == corpus_id]['question'].tolist()
+                    if approx:
+                        question, references = self._extract_question_and_approx_references(corpus, 4000, questions_list)
+                    else:
+                        question, references = self._extract_question_and_references(corpus, 4000, questions_list)
+                    if len(references) > 5:
+                        raise ValueError("The number of references exceeds 5.")
+                    
+                    references = [{'content': ref[0], 'start_index': ref[1], 'end_index': ref[2]} for ref in references]
+                    new_question = {
+                        'question': question,
+                        'references': json.dumps(references),
+                        'corpus_id': corpus_id
+                    }
+
+                    new_df = pd.DataFrame([new_question])
+                    self.synth_questions_df = pd.concat([self.synth_questions_df, new_df], ignore_index=True)
+                    self._save_questions_df()
+
+                    break
+                except (ValueError, json.JSONDecodeError) as e:
+                    print(f"Error occurred: {e}")
+                    continue
+            i += 1
