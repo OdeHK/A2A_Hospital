@@ -18,12 +18,12 @@ Kho lưu trữ này chứa triển khai của một chatbot dựa trên Retrieva
 
 # Hướng dẫn sử dụng
 
-Cài đặt các thư viện phụ thuộc cần thiết (ví dụ: pip install streamlit qdrant-client vncorenlp ....).
-Cấu hình các thông tin trong config.py (đường dẫn file, khóa API, v.v.).
-Chạy ứng dụng Streamlit bằng lệnh: streamlit run < PATH_to_med_chatbot.py>
+- Cài đặt các thư viện phụ thuộc cần thiết (ví dụ: pip install streamlit qdrant-client vncorenlp ....).
+- Cấu hình các thông tin trong config.py (đường dẫn file, khóa API, v.v.).
+- Chạy ứng dụng Streamlit bằng lệnh: streamlit run < PATH_to_med_chatbot.py>
 
 
-##Lưu ý
+## Lưu ý
 
 - Đảm bảo file PDF được chỉ định trong config.py tồn tại và có thể truy cập.
 - Kiểm tra khóa API (Qdrant, Groq) để đảm bảo kết nối thành công.
