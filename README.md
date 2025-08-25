@@ -53,10 +53,9 @@ Những câu hỏi này giúp kiểm tra khả năng chatbot truy xuất thông 
 
 Dưới đây là một số ví dụ về kết quả hỏi đáp của chatbot RAG khi xử lý các truy vấn liên quan đến tài liệu y tế. Các hình ảnh minh họa giao diện Streamlit và câu trả lời của chatbot:
 
-| Hình ảnh 1 |  [URL_1](https://drive.google.com/file/d/1dFnFVJselumb4t-SFmPIegeUZ3R7-xmM/view?usp=drive_link)   |
-|------------|------------|
-| Hình ảnh 2 |  [URL_2](https://drive.google.com/file/d/1U9uwMVNwfNal4ndczinHIflG9TKf0q9y/view?usp=drive_link)   |
-|------------|------------|
-| Hình ảnh 3 |  [URL_3](https://drive.google.com/file/d/1yFi1NFtilAO2bYcMhz0CkV-kxQQ75m6A/view?usp=drive_link)   |
-|------------|------------|
-| Hình ảnh 4 |  [URL_4](https://drive.google.com/file/d/1EfR128Y1dpxroteATgIHU9hnSlIjeC7o/view?usp=drive_link)   |
+| Tên hình   | Liên kết |
+|------------|----------|
+| Hình ảnh 1 | [URL_1](https://drive.google.com/file/d/1dFnFVJselumb4t-SFmPIegeUZ3R7-xmM/view?usp=drive_link) |
+| Hình ảnh 2 | [URL_2](https://drive.google.com/file/d/1U9uwMVNwfNal4ndczinHIflG9TKf0q9y/view?usp=drive_link) |
+| Hình ảnh 3 | [URL_3](https://drive.google.com/file/d/1yFi1NFtilAO2bYcMhz0CkV-kxQQ75m6A/view?usp=drive_link) |
+| Hình ảnh 4 | [URL_4](https://drive.google.com/file/d/1EfR128Y1dpxroteATgIHU9hnSlIjeC7o/view?usp=drive_link) |
