@@ -229,7 +229,6 @@ class GeminiSyntheticEvaluation(SyntheticEvaluation):
         
         response = get_gemini_embedding([target] + valid_refs)
 
-        response = get_gemini_embedding([target]+references)
 
         nparray1 = np.array(response[0])
 
