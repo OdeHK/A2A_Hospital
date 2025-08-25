@@ -2,6 +2,7 @@
 
 # RAG Chatbot Streamlit Project
 Kho lưu trữ này chứa triển khai của một chatbot dựa trên Retrieval-Augmented Generation (RAG) sử dụng Streamlit. Dự án được thiết kế để xử lý các tài liệu PDF, trích xuất và tiền xử lý văn bản, nhúng nó thành các vector, lưu trữ trong cơ sở dữ liệu vector, truy xuất thông tin liên quan, và tạo câu trả lời bằng mô hình ngôn ngữ. Dưới đây là tổng quan về các file và mục đích của chúng trong dự án.
+
 # Cấu trúc dự án
 
 - .gitignore: Xác định các file và thư mục cần bỏ qua khi commit vào Git (ví dụ: file tạm, thông tin xác thực).
@@ -27,3 +28,36 @@ Kho lưu trữ này chứa triển khai của một chatbot dựa trên Retrieva
 
 - Đảm bảo file PDF được chỉ định trong config.py tồn tại và có thể truy cập.
 - Kiểm tra khóa API (Qdrant, Groq) để đảm bảo kết nối thành công.
+
+# Hỏi đáp
+
+## Ví dụ Test hỏi đáp
+
+Dưới đây là một số ví dụ câu hỏi mà bạn có thể sử dụng để thử nghiệm chatbot của dự án. Các câu hỏi được thiết kế để kiểm tra khả năng xử lý thông tin y tế và trả lời tự nhiên:
+
+- **Câu hỏi 1**: Tôi bị đau vùng hố chậu trái tái phát, đôi khi sốt và thay đổi thói quen đi ngoài. Tôi nên nghĩ đến bệnh gì?
+- - **Trả lời**: Bệnh túi thừa / Viêm túi thừa
+
+- **Câu hỏi 2**: Bác sĩ ơi, tôi bị ỉa chảy có máu, có nhầy, đau bụng và mót rặn — những triệu chứng này hướng tới bệnh gì?
+- - **Trả lời**: Viêm loét đại tràng
+
+- **Câu hỏi 3**: Bác sĩ, ăn xong khoảng vài tiếng là bụng giữa bị rát, đôi khi đau khiến tôi thức dậy ban đêm, khi tôi ăn thì mới hết đau thì tôi bị gì vậy?
+- - **Trả lời**: Loét tá tràng
+
+- **Câu hỏi 4**: Tôi đau bụng, lúc táo bón, lúc tiêu chảy, đi xong thấy đỡ — phải làm sao, có bệnh không?
+- - **Trả lời**: Hội chứng ruột kích thích (IBS)
+
+Những câu hỏi này giúp kiểm tra khả năng chatbot truy xuất thông tin từ tài liệu y tế và tạo câu trả lời phù hợp.
+
+## Kết quả hỏi đáp
+
+Dưới đây là một số ví dụ về kết quả hỏi đáp của chatbot RAG khi xử lý các truy vấn liên quan đến tài liệu y tế. Các hình ảnh minh họa giao diện Streamlit và câu trả lời của chatbot:
+
+| Hình ảnh 1 | Hình ảnh 2 |
+|------------|------------|
+| ![Kết quả 1](C:\Users\Acer\OneDrive\Desktop\Intern\images\1.jpg) | ![Kết quả 2](C:\Users\Acer\OneDrive\Desktop\Intern\images\2.jpg) |
+
+| Hình ảnh 3 | Hình ảnh 4 |
+|------------|------------|
+| ![Kết quả 3](C:\Users\Acer\OneDrive\Desktop\Intern\images\3.jpg) | ![Kết quả 4](C:\Users\Acer\OneDrive\Desktop\Intern\images\4.jpg) |
+
