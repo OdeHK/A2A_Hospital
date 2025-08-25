@@ -36,16 +36,16 @@ Kho lưu trữ này chứa triển khai của một chatbot dựa trên Retrieva
 Dưới đây là một số ví dụ câu hỏi mà bạn có thể sử dụng để thử nghiệm chatbot của dự án. Các câu hỏi được thiết kế để kiểm tra khả năng xử lý thông tin y tế và trả lời tự nhiên:
 
 - **Câu hỏi 1**: Tôi bị đau vùng hố chậu trái tái phát, đôi khi sốt và thay đổi thói quen đi ngoài. Tôi nên nghĩ đến bệnh gì?
-- - **Trả lời**: Bệnh túi thừa / Viêm túi thừa
+    - **Trả lời**: Bệnh túi thừa / Viêm túi thừa
 
 - **Câu hỏi 2**: Bác sĩ ơi, tôi bị ỉa chảy có máu, có nhầy, đau bụng và mót rặn — những triệu chứng này hướng tới bệnh gì?
-- - **Trả lời**: Viêm loét đại tràng
+    - **Trả lời**: Viêm loét đại tràng
 
 - **Câu hỏi 3**: Bác sĩ, ăn xong khoảng vài tiếng là bụng giữa bị rát, đôi khi đau khiến tôi thức dậy ban đêm, khi tôi ăn thì mới hết đau thì tôi bị gì vậy?
-- - **Trả lời**: Loét tá tràng
+    - **Trả lời**: Loét tá tràng
 
 - **Câu hỏi 4**: Tôi đau bụng, lúc táo bón, lúc tiêu chảy, đi xong thấy đỡ — phải làm sao, có bệnh không?
-- - **Trả lời**: Hội chứng ruột kích thích (IBS)
+    - **Trả lời**: Hội chứng ruột kích thích (IBS)
 
 Những câu hỏi này giúp kiểm tra khả năng chatbot truy xuất thông tin từ tài liệu y tế và tạo câu trả lời phù hợp.
 
