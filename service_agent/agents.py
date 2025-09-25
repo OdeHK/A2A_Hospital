@@ -4,17 +4,17 @@ from langgraph.graph import MessagesState, START, END, StateGraph
 from langgraph.checkpoint.memory import MemorySaver
 from pydantic import Field
 from langchain_groq import ChatGroq
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
 from .utils import get_package_by_id, convert_packages_to_str, PACKAGES
 from .prompts import *
-load_dotenv()
+load_dotenv(find_dotenv())
 
 from langchain_core.messages import HumanMessage, AIMessage
 from langgraph.graph import MessagesState
+import os
 
-
-# GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-GROQ_API_KEY = 'GROQ-API-KEY'
+GROQ_API_KEY = os.getenv("GROQ-API-KEY")
+# GROQ_API_KEY = 'GROQ-API-KEY'
 
 llm_qwen3_32b_wr = ChatGroq(
     model="qwen/qwen3-32b",
@@ -43,9 +43,8 @@ class ListPackages(BaseModel):
 
 class HistoryStatus(BaseModel):
     """Trạng thái kiểm tra xem câu hỏi hiện tại có cần thêm nội dung bên ngoài hay chỉ dựa vào thông tin trong lịch sử chat là đủ"""
-    status: int = Field(
-        description="0 nếu như kết quả bên trong lịch chat là đủ để trả lời câu hỏi hiện tại, 1 là ngược lại"
-    )
+    decision: int = Field(description="0 nếu đủ thông tin trong lịch sử, 1 nếu cần retrieve thêm")
+        
 
 def filter_messages(state: MessagesState):
     messages = state["messages"]
@@ -61,25 +60,63 @@ def filter_messages(state: MessagesState):
 
 
 def check_history(state: MessagesState):
+    """
+    Cải thiện hàm check_history với xử lý tốt hơn
+    """
     messages = state['messages']
-    sys_msg = CHECKING_HISTORY_INSTRUCTION
-    structed_llm = llm_llama_8b.with_structured_output(HistoryStatus)
-    response = structed_llm.invoke([SystemMessage(content=sys_msg)] + messages)
-    response = AIMessage(
-        content="Check history",
-        additional_kwargs={**response.model_dump(), "source": "check_history"}
-    )
+    
+    # Kiểm tra nếu không có lịch sử hoặc chỉ có câu hỏi đầu tiên
+    if len(messages) <= 1:
+        response = AIMessage(
+            content="Check history - No sufficient history",
+            additional_kwargs={"decision": 1, "source": "check_history", "reason": "insufficient_history"}
+        )
+        return {"messages": [response]}
+    
+    # Tạo structured output với schema rõ ràng hơn
+    try:
+        sys_msg = CHECKING_HISTORY_INSTRUCTION
+        structed_llm = llm_llama_8b.with_structured_output(HistoryStatus)
+        
+        # Thêm context về task hiện tại
+        enhanced_messages = [SystemMessage(content=sys_msg)] + messages
+        
+        response_structured = structed_llm.invoke(enhanced_messages)
+        
+        # Validate response
+        decision = response_structured.decision if hasattr(response_structured, 'decision') else response_structured
+        if decision not in [0, 1]:
+            # Fallback nếu model trả về không đúng format
+            decision = 1
+            
+        response = AIMessage(
+            content=f"Check history - Decision: {decision}",
+            additional_kwargs={
+                "decision": decision,
+                "source": "check_history",
+                "model_response": response_structured.model_dump() if hasattr(response_structured, 'model_dump') else str(response_structured)
+            }
+        )
+        
+    except Exception as e:
+        # Error handling - mặc định chọn retrieve để an toàn
+        response = AIMessage(
+            content="Check history - Error occurred, defaulting to retrieve",
+            additional_kwargs={"decision": 1, "source": "check_history", "error": str(e)}
+        )
+    
     return {"messages": [response]}
+
 
 
 def route_message(state: MessagesState):
     last_message = state["messages"][-1]
 
-    status = last_message.additional_kwargs.get("status", [])
-    print('Status:', status)
-    if status == 1:
+    decision = last_message.additional_kwargs.get("decision", [])
+    print('Decision:', decision)
+    if decision == 0:
         return "answer_without_retrival"
-    elif status == 0:
+    elif decision == 1:
         return "select_services"
     else:
         print("[LOG]❌Error: Output of 'check_history' state is invalid, the value must be 0 or 1")
