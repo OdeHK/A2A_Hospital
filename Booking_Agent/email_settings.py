@@ -2,7 +2,7 @@ HOST = 'smtp.gmail.com'
 PORT = 587
 
 # Sender email default credentials
-from_email_default = "millerken5604@gmail.com"
-password_default = "iinl vivv zpfg chjf"  # app password
+from_email_default = "Email của bạn"
+password_default = "Password"  # app password 
 
-sdt = '0392183818'
+sdt = 'xxxxxxxxxxxxxx'
