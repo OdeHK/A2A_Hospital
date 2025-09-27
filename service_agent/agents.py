@@ -1,3 +1,5 @@
+import sys, os
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from pydantic import BaseModel
 from langchain_core.messages import SystemMessage, HumanMessage, RemoveMessage, AIMessage
 from langgraph.graph import MessagesState, START, END, StateGraph
@@ -7,6 +9,8 @@ from langchain_groq import ChatGroq
 from dotenv import load_dotenv, find_dotenv
 from .utils import get_package_by_id, convert_packages_to_str, PACKAGES
 from .prompts import *
+from typing import List
+
 load_dotenv(find_dotenv())
 
 from langchain_core.messages import HumanMessage, AIMessage
@@ -19,13 +23,13 @@ GROQ_API_KEY = os.getenv("GROQ-API-KEY")
 llm_qwen3_32b_wr = ChatGroq(
     model="qwen/qwen3-32b",
     temperature=0,
+    reasoning_format="hidden",
     api_key=GROQ_API_KEY
 )
 llm_qwen3_32b_nr = ChatGroq(
     model="qwen/qwen3-32b",
     temperature=0,
     reasoning_effort='none',
-    reasoning_format="hidden",
     api_key=GROQ_API_KEY
 )
 
@@ -34,6 +38,9 @@ llm_llama_8b = ChatGroq(
     temperature=0,
     api_key=GROQ_API_KEY
 )
+
+class ConversationState(MessagesState):
+    summary: str
 
 class ListPackages(BaseModel):
     """Danh sách dịch vụ khám sức khỏe"""
@@ -44,51 +51,43 @@ class ListPackages(BaseModel):
 class HistoryStatus(BaseModel):
     """Trạng thái kiểm tra xem câu hỏi hiện tại có cần thêm nội dung bên ngoài hay chỉ dựa vào thông tin trong lịch sử chat là đủ"""
     decision: int = Field(description="0 nếu đủ thông tin trong lịch sử, 1 nếu cần retrieve thêm")
-        
-
-def filter_messages(state: MessagesState):
-    messages = state["messages"]
-
-    delete_messages = []
-    for msg in messages:
-        if isinstance(msg, AIMessage):
-            source = msg.additional_kwargs.get("source")
-            if source in ["check_history", "select_services"]:
-                delete_messages.append(RemoveMessage(id=msg.id))
-
-    return {"messages": delete_messages}
 
 
-def check_history(state: MessagesState):
+def check_history(state: ConversationState):
     """
-    Cải thiện hàm check_history với xử lý tốt hơn
+    Hàm để kiểm tra history có trả lời được câu hỏi hiện tại không
     """
     messages = state['messages']
-    
+    summary = state.get('summary', [])
+
     # Kiểm tra nếu không có lịch sử hoặc chỉ có câu hỏi đầu tiên
-    if len(messages) <= 1:
+    if len(messages) <= 1 and not summary:
         response = AIMessage(
             content="Check history - No sufficient history",
             additional_kwargs={"decision": 1, "source": "check_history", "reason": "insufficient_history"}
         )
         return {"messages": [response]}
     
-    # Tạo structured output với schema rõ ràng hơn
     try:
         sys_msg = CHECKING_HISTORY_INSTRUCTION
         structed_llm = llm_llama_8b.with_structured_output(HistoryStatus)
-        
-        # Thêm context về task hiện tại
-        enhanced_messages = [SystemMessage(content=sys_msg)] + messages
+
+        # Build context: system hướng dẫn + summary (nếu có) + messages
+        enhanced_messages = [SystemMessage(content=sys_msg)]
+        if summary:
+            print("FOUNDDDDDDDDDDDDD")
+            enhanced_messages =[SystemMessage(content=sys_msg+summary)]
+        enhanced_messages += messages
+
+        print("enhanced_messages in check history:", enhanced_messages)
         
         response_structured = structed_llm.invoke(enhanced_messages)
-        
-        # Validate response
+
+        # Validate decision
         decision = response_structured.decision if hasattr(response_structured, 'decision') else response_structured
         if decision not in [0, 1]:
-            # Fallback nếu model trả về không đúng format
             decision = 1
-            
+
         response = AIMessage(
             content=f"Check history - Decision: {decision}",
             additional_kwargs={
@@ -99,7 +98,7 @@ def check_history(state: MessagesState):
         )
         
     except Exception as e:
-        # Error handling - mặc định chọn retrieve để an toàn
+        # Fallback khi lỗi
         response = AIMessage(
             content="Check history - Error occurred, defaulting to retrieve",
             additional_kwargs={"decision": 1, "source": "check_history", "error": str(e)}
@@ -108,8 +107,7 @@ def check_history(state: MessagesState):
     return {"messages": [response]}
 
 
-
-def route_message(state: MessagesState):
+def route_message(state: ConversationState):
     last_message = state["messages"][-1]
 
     decision = last_message.additional_kwargs.get("decision", [])
@@ -122,7 +120,7 @@ def route_message(state: MessagesState):
         print("[LOG]❌Error: Output of 'check_history' state is invalid, the value must be 0 or 1")
 
 
-def select_services(state:MessagesState):
+def select_services(state:ConversationState):
     sys_msg = SELECTING_INSTRUCTION.format(packages=convert_packages_to_str(PACKAGES))
     messages = state["messages"]
     structed_llm = llm_qwen3_32b_wr.with_structured_output(ListPackages)
@@ -136,41 +134,76 @@ def select_services(state:MessagesState):
     return {"messages": [response]}
 
 
-def answer_with_retrival(state:MessagesState):
+def answer_with_retrival(state:ConversationState):
     messages = state["messages"]
     selected_service_ids = messages[-1].additional_kwargs.get("service_ids", [])
-    print('Selected ids:', selected_service_ids)
     selected_packages = get_package_by_id(ids=selected_service_ids)
     # print('***'*30)
     # print("Gói đã chọn:\n", selected_packages)
     # print('***'*30)
     sys_msg = ANSWER_WITH_SERVICE_INSTRUCTION.format(selected_packages=selected_packages)
-    response = llm_qwen3_32b_nr.invoke([SystemMessage(content=sys_msg)] + messages)
+    response = llm_llama_8b.invoke([SystemMessage(content=sys_msg)] + messages)
+    print("[LOG IN AGENTS] Answered")
     return {"messages": [response]}
 
 
-def answer_without_retrival(state:MessagesState):
+def answer_without_retrival(state:ConversationState):
     sys_msg = ANSWER_WITHOUT_SERVICE_INSTRUCTION
 
-    response = llm_qwen3_32b_nr.invoke([SystemMessage(content=sys_msg)] + state["messages"])
+    response = llm_llama_8b.invoke([SystemMessage(content=sys_msg)] + state["messages"])
+    print("[LOG IN AGENTS] Answered")
     return {"messages": [response]}
     
+def summarize_history(state: ConversationState):
+
+    messages = state["messages"]
+    
+    if len(messages) <= 1:
+        return {"messages": messages}
+    
+    old_messages = messages
+
+    sys_msg = SUMMARY_HISTORY
+    
+    response = llm_qwen3_32b_wr.invoke([SystemMessage(content=sys_msg)] + old_messages)
+    summary_text = response.content if hasattr(response, "content") else str(response)
+
+    
+    delete_messages = []
+    for msg in messages:
+        # Xoá hết HumanMessage
+        if isinstance(msg, HumanMessage):
+            delete_messages.append(RemoveMessage(id=msg.id))
+
+        # Giữ lại chỉ SystemMessage có source=summarize_history
+        elif isinstance(msg, AIMessage):
+            source = msg.additional_kwargs.get("source")
+            if source not in ["summarize_history"]:
+                delete_messages.append(RemoveMessage(id=msg.id))
+    return {
+        "messages": delete_messages,
+        "summary": summary_text
+        }
+
 
 def build_graph() -> StateGraph:
     within_thread_memory = MemorySaver()
-    builder = StateGraph(MessagesState)
-    builder.add_node('filter_messages', filter_messages)
+    builder = StateGraph(ConversationState)
     builder.add_node('check_history', check_history)
     builder.add_node('select_services', select_services)
     builder.add_node('answer_with_retrival', answer_with_retrival)
     builder.add_node('answer_without_retrival', answer_without_retrival)
+    builder.add_node('summarize_history', summarize_history)
 
-    builder.add_edge(START, 'filter_messages')
-    builder.add_edge('filter_messages', 'check_history')
+    builder.add_edge(START, 'check_history')
+    # builder.add_edge('filter_messages', 'check_history')
     builder.add_conditional_edges('check_history', route_message)
     builder.add_edge('select_services', 'answer_with_retrival')
     builder.add_edge('answer_with_retrival', END)
     builder.add_edge('answer_without_retrival', END)
+    builder.add_edge('answer_with_retrival','summarize_history')
+    builder.add_edge('answer_without_retrival','summarize_history')
+    builder.add_edge('summarize_history', END)
 
     graph = builder.compile(checkpointer=within_thread_memory)
 
@@ -189,7 +222,5 @@ if __name__ == "__main__":
             break
 
         input_mes = HumanMessage(content=input_mes)
-        for chunk in graph.stream({"messages": [input_mes]}, config, stream_mode="values"):
-            chunk["messages"][-1].pretty_print()
-            
-
+        for chunk in graph.stream({"messages": [input_mes]}, config, stream_mode="updates"):
+            pprint(chunk)
