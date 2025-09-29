@@ -5,7 +5,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from pydantic import Field
 from langchain_groq import ChatGroq
 from dotenv import load_dotenv, find_dotenv
-from utils import get_package_by_id, convert_packages_to_str, PACKAGES
+from .utils import get_package_by_id, convert_packages_to_str, PACKAGES
 from .prompts import *
 load_dotenv(find_dotenv())
 
@@ -47,32 +47,23 @@ class HistoryStatus(BaseModel):
     """Trạng thái kiểm tra xem câu hỏi hiện tại có cần thêm nội dung bên ngoài hay chỉ dựa vào thông tin trong lịch sử chat là đủ"""
     decision: int = Field(description="0 nếu đủ thông tin trong lịch sử, 1 nếu cần retrieve thêm")
 
-
-#_________________________________________________________________________________________NEW      
 def summarize_history(state: MessagesState):
-
     messages = state["messages"]
     
-    # if len(messages) <= 1:
-    #     return {"messages": messages}
-    old_messages = messages
-    recent_messages = []
-
     sys_msg = SUMMARY_HISTORY
-    
-    response = llm_qwen3_32b_wr.invoke([SystemMessage(content=sys_msg)] + old_messages)
+    response = llm_qwen3_32b_wr.invoke([SystemMessage(content=sys_msg)] + messages)
     cleaned = re.sub(r"<think>.*?</think>", "", response.content, flags=re.DOTALL)
 
     try:
         summary_json = json.loads(cleaned)
         summary_text = summary_json.get("summary", "Không có gì để tóm tắt.")
     except Exception:
-        summary_text = cleaned[:200]  
+        summary_text = cleaned[:250]
 
     summary_message = SystemMessage(content=f"[Tóm tắt hội thoại trước đó]: {summary_text}")
-          
-    return {"messages": [summary_message] + recent_messages}
-
+    state["messages"] = [summary_message]
+    # Chỉ giữ summary, không append gì khác
+    return {"messages": [summary_message]}
 
 def filter_messages(state: MessagesState):
     messages = state["messages"]
@@ -97,7 +88,8 @@ def check_history(state: MessagesState):
             content="Check history - No sufficient history",
             additional_kwargs={"decision": 1, "source": "check_history", "reason": "insufficient_history"}
         )
-        return {"messages": [response]}
+        new_memory = state["messages"] + [response]  # state["messages"] lúc này chỉ là summary
+        return {"messages": new_memory}
     
     # Tạo structured output với schema rõ ràng hơn
     try:
@@ -131,8 +123,8 @@ def check_history(state: MessagesState):
             additional_kwargs={"decision": 1, "source": "check_history", "error": str(e)}
         )
     
-    return {"messages": [response]}
-
+    new_memory = state["messages"] + [response]  # state["messages"] lúc này chỉ là summary
+    return {"messages": new_memory}
 
 
 def route_message(state: MessagesState):
@@ -159,7 +151,8 @@ def select_services(state:MessagesState):
         additional_kwargs={**response.model_dump(), "source": "select_services"}
     )
 
-    return {"messages": [response]}
+    new_memory = state["messages"] + [response]  # state["messages"] lúc này chỉ là summary
+    return {"messages": new_memory}
 
 
 def answer_with_retrival(state:MessagesState):
@@ -172,14 +165,16 @@ def answer_with_retrival(state:MessagesState):
     # print('***'*30)
     sys_msg = ANSWER_WITH_SERVICE_INSTRUCTION.format(selected_packages=selected_packages)
     response = llm_qwen3_32b_nr.invoke([SystemMessage(content=sys_msg)] + messages)
-    return {"messages": [response]}
+    new_memory = state["messages"] + [response]  # state["messages"] lúc này chỉ là summary
+    return {"messages": new_memory}
 
 
 def answer_without_retrival(state:MessagesState):
     sys_msg = ANSWER_WITHOUT_SERVICE_INSTRUCTION
 
     response = llm_qwen3_32b_nr.invoke([SystemMessage(content=sys_msg)] + state["messages"])
-    return {"messages": [response]}
+    new_memory = state["messages"] + [response]  # state["messages"] lúc này chỉ là summary
+    return {"messages": new_memory}
     
 
 def build_graph() -> StateGraph:
@@ -188,7 +183,7 @@ def build_graph() -> StateGraph:
 
 
     builder.add_node('filter_messages', filter_messages)
-    
+    builder.add_node('summarize_history', summarize_history)
     builder.add_node('check_history', check_history)
     builder.add_node('select_services', select_services)
     builder.add_node('answer_with_retrival', answer_with_retrival)
@@ -200,27 +195,50 @@ def build_graph() -> StateGraph:
     builder.add_edge('summarize_history', 'check_history')
     builder.add_conditional_edges('check_history', route_message)
     builder.add_edge('select_services', 'answer_with_retrival')
-    builder.add_node('summarize_history', summarize_history)
+    
     builder.add_edge('answer_with_retrival', END)
     builder.add_edge('answer_without_retrival', END)
 
+    
     graph = builder.compile(checkpointer=within_thread_memory)
     return graph
 
-from pprint import pprint
-if __name__ == "__main__":
-    config = {"configurable": {"thread_id": "1"}}
-    print("Khởi tạo đồ thị...")
-    graph = build_graph()
-    print("Đồ thị khởi tạo xong.")
-    while True:
-        input_mes = input("Nhập câu hỏi của bệnh nhân: ")
 
-        if input_mes.lower() in ['exit', 'quit', 'q']:
-            break
-
-        input_mes = HumanMessage(content=input_mes)
-        for chunk in graph.stream({"messages": [input_mes]}, config, stream_mode="values"):
+class ServiceAgent:
+    SUPPORTED_CONTENT_TYPES = ["text", "text/plain"]
+    
+    def __init__(self):
+        self.graph = build_graph()
+    
+    def invoke(self, query, sessionId):
+        config = {"configurable":{"thread_id": sessionId}}
+        input_mes = HumanMessage(content= query)
+        return self.graph.invoke({"messages": input_mes},config)
+    
+    def stream(self, query,sessionId):
+        config = {"configurable": {"thread_id": sessionId}}
+        input_mes = HumanMessage(content=query)
+        for chunk in self.graph.stream({"messages": input_mes},config,stream_mode="values"):
             chunk["messages"][-1].pretty_print()
+        
+    
+
+# from pprint import pprint
+
+# if __name__ == "__main__":
+#     config = {"configurable": {"thread_id": "1"}}
+#     print("Khởi tạo đồ thị...")
+#     graph = build_graph()
+#     print("Đồ thị khởi tạo xong.")
+#     while True:
+#         input_text = input("Nhập câu hỏi của bệnh nhân: ")
+#         if input_text.lower() in ['exit', 'quit', 'q']:
+#             break
+
+#         input_mes = HumanMessage(content=input_text)
+
+#         for chunk in graph.stream({"messages": input_mes}, config, stream_mode="values"):
+
+#             chunk["messages"][-1].pretty_print()
             
 
