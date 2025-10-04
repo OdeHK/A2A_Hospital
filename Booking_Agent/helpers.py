@@ -180,18 +180,20 @@ def parse_datetime(date_str: str, time_str: str) -> datetime:
     return datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M:%S")
 
 
-def is_valid_booking_date(date_str: str) -> bool:
-    """
-    Kiểm tra ngày có hợp lệ không:
-    - Phải lớn hơn hôm nay
-    - Không quá 7 ngày tới
-    """
-    try:
-        target = datetime.strptime(date_str, "%Y-%m-%d").date()
-        today = datetime.now().date()
-        return today < target <= today + timedelta(days=7)
-    except ValueError:
-        return False
+def is_valid_booking_date(date_obj):
+    """Kiểm tra ngày có hợp lệ không."""
+    if date_obj is None:
+        return False, "❌ Ngày không hợp lệ hoặc chưa chọn. Vui lòng chọn lại."
+
+    today = datetime.now().date()
+    min_date = today + timedelta(days=1)
+    max_date = today + timedelta(days=14)
+
+    if date_obj < min_date:
+        return False, f"❌ Ngày phải sau hôm nay ({today.strftime('%d/%m/%Y')})."
+    if date_obj > max_date:
+        return False, f"❌ Ngày không được quá {max_date.strftime('%d/%m/%Y')}."
+    return True, ""
 
 
 # Giữ alias cho tương thích cũ nếu app.py gọi validate_date
@@ -221,13 +223,24 @@ def is_time_overlap(start1: str, end1: str, start2: str, end2: str) -> bool:
 # Tạo time cho form
 # ==========================
 def generate_time_slots(start="06:00", end="18:00", step=30):
-    times = []
+    slots = []
     current = datetime.strptime(start, "%H:%M")
     end_dt = datetime.strptime(end, "%H:%M")
-    while current <= end_dt:
-        times.append(current.time())
-        current += timedelta(minutes=step)
-    return times
+
+    while current < end_dt:
+        next_time = current + timedelta(minutes=step)
+        if next_time > end_dt:
+            break
+
+        # Nếu slot nằm trong khoảng nghỉ trưa thì bỏ qua
+        if not (datetime.strptime("11:30", "%H:%M") <= current < datetime.strptime("13:00", "%H:%M")):
+            slot_str = f"{current.strftime('%H:%M')} - {next_time.strftime('%H:%M')}"
+            slots.append(slot_str)
+
+        current = next_time
+
+    return slots
+
 
 # =============================
 # Hàm gửi mail
@@ -264,6 +277,24 @@ def format_date_vn(date_value):
         return datetime.strptime(date_value, "%Y-%m-%d").strftime("%d/%m/%Y")
     except Exception:
         return date_value
+
+# =============================
+# Map giờ từ HH:MM về HH:MM-HH:MM
+# =============================
+def map_time_to_slot(time_str, slots, step=30):
+    """Map HH:MM vào slot interval (HH:MM - HH:MM)."""
+    try:
+        t = datetime.strptime(time_str, "%H:%M")
+    except:
+        return None
+
+    for slot in slots:
+        start_str, end_str = slot.split(" - ")
+        start = datetime.strptime(start_str, "%H:%M")
+        end = datetime.strptime(end_str, "%H:%M")
+        if start <= t < end:
+            return slot
+    return None
 
 
 # =============================
