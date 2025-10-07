@@ -41,7 +41,7 @@ body {
 
 /* Chat window */
 .chatbox__support {
-  width: 550px; height: 580px;
+  width: 2200px; height: 650px;
   background: #fff;
   border-radius: var(--radius);
   box-shadow: var(--shadow);
@@ -118,5 +118,12 @@ body {
   width: 44px; height: 44px; border-radius: 50%;
   border: none; background: var(--gradient); color: #fff; cursor: pointer;
 }
+
+.messages__item p { margin: 6px 0; }
+.messages__item ul { padding-left: 18px; margin: 6px 0; }
+.messages__item li { list-style-type: disc; margin-left: 8px; }
+.messages__item b { font-weight: 600; color: #333; }
+.messages__item br { line-height: 1.4; }
+
 
 

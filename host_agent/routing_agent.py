@@ -14,6 +14,8 @@ import json
 import uuid
 from typing import Any, Dict, List
 from types import SimpleNamespace
+import re
+import html
 
 import logging
 import sys
@@ -208,22 +210,22 @@ class HostAgent:
     def root_instruction(self, context: ReadonlyContext) -> str:
         current_agent = self.check_state(context)
         return f"""
-Bạn là điều phối viên. KHÔNG trả lời trực tiếp khi có thể sử dụng tools.
-Nếu người dùng mô tả TRIỆU CHỨNG và/hoặc hỏi về GÓI KHÁM / CHI PHÍ / ĐẶT LỊCH:
-  - Sử dụng tool `orchestrate_care_flow(message)` để chạy luồng:
-      1) Gọi SymptomAgent phân tích triệu chứng và đưa ra các chẩn đoán gợi ý + danh sách xét nghiệm cần làm.
-      2) Gọi CostAgent với tóm tắt từ SymptomAgent để lấy các gói khám & chi phí đề xuất.
-      3) Nếu người dùng rõ ràng muốn ĐẶT LỊCH, gọi BookingAgent để đặt lịch.
-  - Nếu chỉ cần 1 bước đơn giản, có thể dùng `send_message(agent_name, message)` trực tiếp.
+            Bạn là điều phối viên. KHÔNG trả lời trực tiếp khi có thể sử dụng tools.
+            Nếu người dùng mô tả TRIỆU CHỨNG và/hoặc hỏi về GÓI KHÁM / CHI PHÍ / ĐẶT LỊCH:
+            - Sử dụng tool `orchestrate_care_flow(message)` để chạy luồng:
+                1) Gọi SymptomAgent phân tích triệu chứng và đưa ra các chẩn đoán gợi ý + danh sách xét nghiệm cần làm.
+                2) Gọi CostAgent với tóm tắt từ SymptomAgent để lấy các gói khám & chi phí đề xuất.
+                3) Nếu người dùng rõ ràng muốn ĐẶT LỊCH, gọi BookingAgent để đặt lịch.
+            - Nếu chỉ cần 1 bước đơn giản, có thể dùng `send_message(agent_name, message)` trực tiếp.
 
-Luôn bắt đầu bằng `list_remote_agents()` nếu cần kiểm tra agent hiện có.
-Không bịa thông tin. Trả lời cuối cùng phải tổng hợp kết quả từ các agent đã gọi.
+            Luôn bắt đầu bằng `list_remote_agents()` nếu cần kiểm tra agent hiện có.
+            Không bịa thông tin. Trả lời cuối cùng phải tổng hợp kết quả từ các agent đã gọi.
 
-Agents hiện có:
-{self.agents}
+            Agents hiện có:
+            {self.agents}
 
-Current agent: {current_agent['active_agent']}
-        """
+            Current agent: {current_agent['active_agent']}
+                    """
 
     def check_state(self, context: ReadonlyContext):
         state = context.state
@@ -295,7 +297,13 @@ Current agent: {current_agent['active_agent']}
 
         # --- Phát hiện loại agent ---
         agent_type = "general"
-        if "diseases" in merged_data or "explanation" in merged_data:
+
+        if (
+            ("diseases" in merged_data or "explanation" in merged_data)
+            and ("cost" in merged_data or any("chi phí" in t.lower() or "giá" in t.lower() for t in texts))
+        ):
+            agent_type = "symptom_cost"
+        elif "diseases" in merged_data or "explanation" in merged_data:
             agent_type = "symptom"
         elif "cost" in merged_data or any("giá" in t.lower() or "chi phí" in t.lower() for t in texts):
             agent_type = "cost"
@@ -313,76 +321,80 @@ Current agent: {current_agent['active_agent']}
         try:
             llm = ChatGoogleGenerativeAI(model=model_name, temperature=0.3)
 
-            if agent_type == "symptom":
+            if agent_type in ("symptom", "cost", "symptom_cost", "booking", "general"):
                 system_prompt = """
-                Bạn là trợ lý y tế hỗ trợ phân tích triệu chứng. 
-                Hãy xuất kết quả tiếng Việt, rõ ràng, theo đúng định dạng sau:
+                Bạn là trợ lý y tế thông minh, có khả năng tổng hợp thông tin từ nhiều nguồn (triệu chứng, bệnh, chi phí khám).
+                Nhiệm vụ của bạn là viết lại câu trả lời ngắn gọn, tự nhiên, dễ hiểu, KHÔNG XUỐNG DÒNG, KHÔNG DÙNG MARKDOWN.
 
-                🔎 **1. Nhận định**
-                - (1–2 câu ngắn, tóm tắt tình trạng chung, không lặp lại nguyên văn toàn bộ triệu chứng)
+                Hãy dựa trên dữ liệu đầu vào để quyết định cách trả lời:
 
-                🩺 **2. Bệnh có thể gặp**
-                - Liệt kê gạch đầu dòng từng bệnh (mỗi bệnh 1–2 câu mô tả ngắn).
-                - Không lặp lại cùng một bệnh nhiều lần.
+                - Nếu dữ liệu chỉ có TRIỆU CHỨNG hoặc BỆNH:
+                Viết một câu mô tả nhận định tình trạng của người bệnh, liệt kê các bệnh có thể mắc phải, 
+                và thêm giải thích ngắn gọn vì sao có thể mắc các bệnh đó.
+                ⚙️ Ví dụ:
+                "Bạn có thể đang gặp các vấn đề về tiêu hóa như viêm dạ dày hoặc hội chứng ruột kích thích, 
+                do các triệu chứng đau bụng, đầy hơi và buồn nôn mà bạn mô tả."
 
-                💡 **3. Lời khuyên**
-                - Đưa 2–3 khuyến nghị cụ thể (vd: nên đi khám ở đâu, cần làm xét nghiệm gì).
-                - Ngắn gọn, súc tích, không lặp ý.
+                - Nếu dữ liệu chỉ có CHI PHÍ:
+                Nếu có giá cụ thể → dùng trực tiếp.
+                Nếu không có hoặc trống → bạn **bắt buộc sinh giá ước lượng hợp lý** dựa trên loại bệnh hoặc chuyên khoa trước hết là tham khảo trong file goi_kham_vip_full.json, 
+                với mức dao động như sau:
+                    GÓI KHÁM TỔNG QUÁT CƠ BẢN : 4.000.000 Đồng
+                    GÓI KHÁM TỔNG QUÁT NÂNG CAO: 7.000.000đ (Nam)
+                    GÓI KHÁM TỔNG QUÁT CAO CẤP: 17.000.000đ
+                    GÓI KHÁM TẦM SOÁT NGUY CƠ ĐỘT QUỴ : 6.000.000 Đồng
+                    GÓI KHÁM TẦM SOÁT TIM MẠCH: 6.000.000 Đồng
+                    GÓI KHÁM TẦM SOÁT UNG THƯ:  9.500.000đ (Nam) và 9.800.000đ  (Nữ)   
+                    GÓI KHÁM TẦM SOÁT THẬN NIỆU NAM KHOA: 2.500.000 Đồng
+                    GÓI KHÁM TẦM SOÁT VIÊM GAN : 3.500.000 Đồng
+                    GÓI KHÁM TẦM SOÁT GAN NHIỄM MỠ : 3.500.000 Đồng
+                    GÓI KHÁM TẦM SOÁT BỆNH LÝ ỐNG TIÊU HÓA KHÔNG CAN THIỆP : 2.500.000 Đồng
+                    GÓI KHÁM TẦM SOÁT BỆNH LÝ ỐNG TIÊU HÓA CÓ CAN THIỆP: 3.500.000 Đồng
+                    GÓI KHÁM TẦM SOÁT CƠ XƯƠNG KHỚP : 2.500.000 Đồng
+                    GÓI KHÁM TẦM SOÁT UNG THƯ: 14.500.000đ  (Nội soi dạ dày-đại tràng gây mê)   
+                    GÓI KHÁM THẦN KINH: Chụp cộng hưởng từ (MRI): Khoảng 2.000.000 – 3.500.000 VNĐ/vị trí tùy loại có thuốc hay không thuốc phản ứng từ. 
+                    GÓI KHÁM SIÊU ÂM TIM	1.500.000đ
+                    
+
+                ⚙️ Ví dụ:
+                "Chi phí khám tiêu hóa tại bệnh viện trung bình từ 1.200.000 đến 1.800.000 đồng, bao gồm nội soi và xét nghiệm HP."
+                Hoặc nếu thiếu giá:
+                "Hiện chưa có giá chính xác, nhưng chi phí khám tiêu hóa thường dao động từ 800.000 đến 1.500.000 đồng tùy loại gói và cơ sở."
+
+                - Nếu dữ liệu có cả TRIỆU CHỨNG và CHI PHÍ:
+                Viết một câu liền mạch kết hợp cả hai nội dung: 
+                bắt đầu bằng nhận định bệnh, tiếp theo là chi phí khám hoặc xét nghiệm tương ứng (nếu rỗng thì sinh giá ước lượng theo khung trên),
+                cuối cùng thêm lời khuyên ngắn gọn.
+                ⚙️ Ví dụ:
+                "Bạn có thể đang bị viêm dạ dày với các triệu chứng đau vùng thượng vị, buồn nôn và khó tiêu. 
+                Gói khám tiêu hóa có chi phí khoảng 1.200.000 đồng, bao gồm nội soi và xét nghiệm HP. 
+                Nên đi khám sớm để xác định chính xác nguyên nhân và điều trị kịp thời."
+                Hoặc nếu không có giá:
+                "Bạn có thể đang bị viêm dạ dày với các triệu chứng đau vùng thượng vị, buồn nôn và khó tiêu. 
+                Chi phí khám tiêu hóa thường dao động khoảng 800.000 – 1.500.000 đồng tùy cơ sở. 
+                Nên đi khám sớm để xác định chính xác nguyên nhân."
 
                 ⚠️ Yêu cầu:
-                - Giữ đúng 3 mục, có tiêu đề rõ ràng.
-                - Mỗi mục phải bắt đầu bằng biểu tượng + số thứ tự.
-                - Không viết thêm ngoài 3 mục này.
-                - Không lặp lại nội dung giữa các mục.
-                - Ví dụ mẫu đúng để bạn thực hiện:
-                    🔎 1. Nhận định: Bạn đang gặp các vấn đề tiêu hóa với nhiều triệu chứng khác nhau
+                - Viết lại toàn bộ thành một đoạn văn duy nhất.
+                - Không dùng ký hiệu emoji, không xuống dòng, không có đánh số.
+                - Ưu tiên tính tự nhiên, dễ đọc.
+                - Không lặp ý.
+                - Trả về tiếng Việt chuẩn.
+                """
 
-                    🩺 2. Các bệnh có thể bạn sẽ mắc phải:
-                    - Khó tiêu chức năng: Rối loạn tiêu hóa gây đầy bụng, khó tiêu, buồn nôn.
-                    - Viêm dạ dày: Viêm niêm mạc dạ dày do nhiễm trùng, thuốc hoặc các yếu tố khác.
-                    - Hội chứng ruột kích thích (IBS): Rối loạn chức năng ruột gây đau bụng, đầy hơi, táo bón hoặc tiêu chảy.
-                    - Tắc ruột: Tình trạng thức ăn không thể di chuyển qua ruột.
-                    
-                    💡 3. Lời khuyên:
-                    - Đi khám bác sĩ chuyên khoa tiêu hóa.
-                    - Cân nhắc nội soi tiêu hóa, xét nghiệm máu.
-                    - Ăn uống lành mạnh, tránh thức ăn gây kích ứng.
-                """
-            elif agent_type == "cost":
-                system_prompt = """
-                Bạn là trợ lý y tế tư vấn chi phí khám chữa bệnh.
-                - Tóm tắt chi phí dựa trên dữ liệu.
-                - Trình bày tiếng Việt, Markdown, gồm các mục:
-                💰 1. Chi phí tham khảo
-                📋 2. Lưu ý
-                💡 3. Lời khuyên
-                """
-            elif agent_type == "booking":
-                system_prompt = """
-                Bạn là trợ lý đặt lịch khám bệnh.
-                - Hãy hướng dẫn bệnh nhân cách đặt lịch khám.
-                - Trình bày tiếng Việt, Markdown:
-                📅 Hướng dẫn đặt lịch
-                💡 Lời khuyên thêm
-                """
-            else:
-                system_prompt = """
-                Bạn là trợ lý y tế. Hãy trình bày thông tin đầu vào rõ ràng, ngắn gọn, tránh lặp, bằng Markdown.
-                """
+
 
 
             messages = [
                 SystemMessage(content=system_prompt),
-                HumanMessage(content=f"""
-                Dữ liệu đầu vào (có thể lặp, gồm text + JSON):
-
-
-{raw_text}\n\n{json.dumps(merged_data, ensure_ascii=False, indent=2) if merged_data else ''}
-
-
-Hãy viết lại câu trả lời hoàn chỉnh theo đúng cấu trúc Markdown đã quy định.
-""")
-]
+                HumanMessage(
+                    content=f"""
+                        Dữ liệu đầu vào (có thể lặp, gồm text + JSON, từ SymptomAgent, CostAgent, BookingAgent):
+                            {raw_text}\n\n{json.dumps(merged_data, ensure_ascii=False, indent=2) if merged_data else ''}
+                        Hãy viết lại câu trả lời hoàn chỉnh theo đúng cấu trúc Markdown đã quy định.
+                    """
+                    )
+            ]
 
 
             if hasattr(llm, "invoke"):
@@ -390,13 +402,54 @@ Hãy viết lại câu trả lời hoàn chỉnh theo đúng cấu trúc Markdow
             else:
                 resp = llm(messages)
 
-
-            return getattr(resp, "content", None) or str(resp)
+            out = getattr(resp, "content", None) or str(resp)
+            # sanitize markdown to avoid code fences / inline bullets
+            try:
+                out = self._clean_markdown(out)
+            except Exception:
+                logger.exception("[HostAgent._format_response] _clean_markdown failed")
+            return out
 
 
         except Exception as e:
             logger.error(f"[HostAgent._format_response] Gemini call error: {e}")
             return raw_text if raw_text else json.dumps(merged_data, ensure_ascii=False, indent=2)
+    
+    def _clean_markdown(self, text: str) -> str:
+        """
+        Sanitise LLM's markdown-like output:
+        - remove code fences (```...``` or ```lang)
+        - unescape HTML entities
+        - ensure headings/emojis appear on their own lines
+        - convert inline '*' bullets to proper lines
+        - collapse excessive blank lines
+        """
+        if not text:
+            return text
+
+        # 1) Remove code fences (``` or ```lang)
+        text = re.sub(r'```(?:\w+)?\n', '', text)
+        text = text.replace('```', '')
+
+        # 2) Unescape HTML entities (e.g. &lt;, &gt;, &amp;)
+        text = html.unescape(text)
+
+        # 3) Ensure emoji headings and common markers start on new paragraphs
+        # insert two newlines before these emojis if they are inline
+        text = re.sub(r'(?<!\n)(\s*)(🔎|🩺|💡|💰|📋|📅|⚠️)\s*', r'\n\n\2 ', text)
+
+        # 4) Convert inline " * item" to proper bullet lines
+        # Change occurrences like " * X * Y" or " * X" into "\n- X"
+        text = re.sub(r'\s+\*\s+', '\n- ', text)
+
+        # 5) If headings use " - " after them inline, break line before the dash
+        text = re.sub(r'(\*\*[\w\W]{1,80}?\*\*)(?:\s*-\s*)', r'\1\n- ', text)
+
+        # 6) Normalize multiple blank lines to max two
+        text = re.sub(r'\n{3,}', '\n\n', text)
+
+        # 7) Trim whitespace at ends
+        return text.strip()
 
     async def send_message(
         self, agent_name: str, message: str, tool_context: ToolContext
@@ -449,6 +502,7 @@ Hãy viết lại câu trả lời hoàn chỉnh theo đúng cấu trúc Markdow
                 acceptedOutputModes=['text', 'text/plain', 'image/png'],
             ),
         )
+
 
         logger.info(f"[HostAgent.send_message] Sending request messageId={messageId} to {agent_name}")
         logger.debug(f"[HostAgent.send_message] Request preview: {request}")
@@ -516,7 +570,7 @@ Hãy viết lại câu trả lời hoàn chỉnh theo đúng cấu trúc Markdow
                 )
         logger.debug(f"[HostAgent.send_message] Final response_parts: {response_parts}")
         final_text = self._format_response(response_parts)
-        return [final_text]
+        return final_text
 
 
     def _default_task_callback(self, event, card: AgentCard):
@@ -586,6 +640,38 @@ Hãy viết lại câu trả lời hoàn chỉnh theo đúng cấu trúc Markdow
 
         return t
 
+
+    def _flatten_orchestrate_result(self, resp) -> list:
+        """
+        Convert orchestrate_care_flow result -> flat list of parts (strings/dicts)
+        Keeps order: symptom -> cost -> booking
+        """
+        parts = []
+        if resp is None:
+            return parts
+        if isinstance(resp, dict):
+            for key in ("symptom", "cost", "booking"):
+                if key in resp:
+                    val = resp[key]
+                    if isinstance(val, list):
+                        for item in val:
+                            parts.append(item)
+                    elif isinstance(val, str):
+                        parts.append(val)
+                    elif isinstance(val, dict):
+                        parts.append(val)
+                    else:
+                        parts.append(str(val))
+        elif isinstance(resp, list):
+            parts = resp
+        elif isinstance(resp, str):
+            parts = [resp]
+        else:
+            parts = [str(resp)]
+        return parts
+
+
+
     async def orchestrate_care_flow(
         self, message: str, tool_context: ToolContext, wants_symptom: bool = True, wants_cost: bool = True, wants_booking: bool = False
     ):
@@ -642,6 +728,7 @@ Hãy viết lại câu trả lời hoàn chỉnh theo đúng cấu trúc Markdow
 
         results["cost"] = cost_resp
 
+
         # Step 3: BookingAgent (unchanged logic)
         if wants_booking:
             wants_booking_flag = any(kw in message.lower() for kw in self._booking_keywords)
@@ -667,7 +754,25 @@ Hãy viết lại câu trả lời hoàn chỉnh theo đúng cấu trúc Markdow
             results["booking"] = ["Not requested or BookingAgent not available"]
             logger.info("Không gọi BookingAgent")
 
-        return results
+        # -------------------------
+        # Produce the user-facing final_text (merge + optional LLM rewrite)
+        # -------------------------
+        # Flatten parts in deterministic order
+        all_parts = self._flatten_orchestrate_result(results)
+        logger.debug(f"[HostAgent.orchestrate_care_flow] all_parts before formatting: {all_parts}")
+
+        # Format final text using _format_response (this will call LLM if configured)
+        try:
+            final_text = self._format_response(all_parts)
+        except Exception:
+            logger.exception("[HostAgent.orchestrate_care_flow] _format_response error, falling back to join")
+            try:
+                final_text = "\n\n".join(map(str, all_parts))
+            except Exception:
+                final_text = str(results)
+
+        # Return both the raw result and the formatted text (backward-compatible)
+        return {"raw": results, "final_text": final_text}
 
     def _summarize_symptom_result(self, symptom_resp: Any) -> str:
         """Create a compact single-line summary from the symptom agent response."""
@@ -687,6 +792,32 @@ Hãy viết lại câu trả lời hoàn chỉnh theo đúng cấu trúc Markdow
             summary = " | ".join(pieces)
             return summary[:150] + ("..." if len(summary) > 150 else "")
         return str(symptom_resp)[:150]
+
+    def _to_user_text(self, resp):
+        """
+        Chuẩn hóa phản hồi của agent (list, dict, str, ...) thành 1 chuỗi văn bản user-facing.
+        Ưu tiên 'final_text' nếu có. Nếu không, flatten và format bằng LLM nếu cấu hình.
+        """
+        # 1️. Nếu dict có final_text thì trả thẳng
+        if isinstance(resp, dict) and "final_text" in resp:
+            return resp["final_text"]
+
+        # 2️. Flatten mọi trường hợp khác thành list phần tử
+        parts = self._flatten_orchestrate_result(resp)
+
+        # 3️. Nếu chỉ có 1 phần tử text, trả luôn
+        if len(parts) == 1 and isinstance(parts[0], str):
+            return parts[0]
+
+        # 4️. Thử format lại cho gọn (có thể gọi LLM nếu bạn bật)
+        try:
+            formatted = self._format_response(parts)
+            return formatted
+        except Exception:
+            logger.exception("[HostAgent._to_user_text] _format_response failed, fallback to join")
+            return "\n\n".join(map(str, parts))
+
+
 
     # === Thêm method ainvoke để HostAgent dùng trực tiếp làm agent ===
     async def ainvoke(self, message: str, session_id: str = None, **kwargs):
@@ -749,15 +880,21 @@ Hãy viết lại câu trả lời hoàn chỉnh theo đúng cấu trúc Markdow
         # - cost-only -> Cost Agent
         # - both -> Symptom Agent then Cost Agent (use orchestrate_care_flow)
         if wants_symptom and wants_cost:
-            return await self.orchestrate_care_flow(message, tool_context, wants_symptom=True, wants_cost=True, wants_booking=wants_booking)
+            raw_result = await self.orchestrate_care_flow(message, tool_context, wants_symptom=True, wants_cost=True, wants_booking=wants_booking)
+            return self._to_user_text(raw_result)
+
         elif wants_symptom and not wants_cost:
-            return await self.send_message("Symptom Agent", message, tool_context)
+            resp = await self.send_message("Symptom Agent", message, tool_context)
+            return self._to_user_text(resp)
+
         elif wants_cost and not wants_symptom:
-            return await self.send_message("Cost Agent", message, tool_context)
+            resp = await self.send_message("Cost Agent", message, tool_context)
+            return self._to_user_text(resp)
+
         else:
-            # fallback: route to Symptom Agent (more likely to be medical question)
             logger.debug("[HostAgent.ainvoke] fallback: routing to Symptom Agent")
-            return await self.send_message("Symptom Agent", message, tool_context)
+            resp = await self.send_message("Symptom Agent", message, tool_context)
+            return self._to_user_text(resp)
 
 
 async def convert_parts(parts: list[Part], tool_context: ToolContext):
@@ -781,20 +918,42 @@ async def convert_part(part: Part, tool_context: ToolContext):
     if kind == 'file':
         file_id = getattr(root.file, "name", str(uuid.uuid4()))
         file_bytes_b64 = getattr(root.file, "bytes", None)
+        mime = getattr(root.file, "mimeType", "application/octet-stream")
+
         if file_bytes_b64:
-            file_bytes = base64.b64decode(file_bytes_b64)
-            file_part = types.Part(
-                inline_data=types.Blob(
-                    mime_type=getattr(root.file, "mimeType", "application/octet-stream"),
-                    data=file_bytes,
+            try:
+                file_bytes = base64.b64decode(file_bytes_b64)
+            except Exception:
+                file_bytes = None
+
+            if file_bytes is not None:
+                file_part = types.Part(
+                    inline_data=types.Blob(
+                        mime_type=mime,
+                        data=file_bytes,
+                    )
                 )
-            )
-            await tool_context.save_artifact(file_id, file_part)
-            tool_context.actions.skip_summarization = True
-            tool_context.actions.escalate = True
-            return DataPart(data={'artifact-file-id': file_id})
+                await tool_context.save_artifact(file_id, file_part)
+                tool_context.actions.skip_summarization = True
+                tool_context.actions.escalate = True
+
+                # If text-like, decode and include text for LLM consumption
+                if mime.startswith("text/") or "json" in mime or "xml" in mime or mime in (
+                    "application/json", "application/xml", "application/javascript", "application/ld+json"
+                ):
+                    try:
+                        text = file_bytes.decode("utf-8")
+                        if len(text) > 20000:
+                            text = text[:20000] + "\n\n...[truncated]"
+                        return {"file_text": text, "artifact-file-id": file_id, "mime": mime}
+                    except Exception:
+                        return {"artifact-file-id": file_id, "mime": mime}
+                # Non-text file -> return dict marker
+                return {"artifact-file-id": file_id, "mime": mime}
+            else:
+                return {"artifact-file-id": file_id, "mime": mime, "note": "decode_failed"}
         else:
-            return {'file': 'empty'}
+            return {"file": "empty"}
     return f'Unknown type: {getattr(part, "kind", str(part))}'
 
 
@@ -813,6 +972,6 @@ def get_initialized_routing_agent_sync(remote_agent_addresses: list[str]):
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     agent = loop.run_until_complete(_init())
-    # ❌ KHÔNG close loop, để agent còn xài httpx.AsyncClient
+    # KHÔNG close loop, để agent còn xài httpx.AsyncClient
     return agent
 

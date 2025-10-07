@@ -10,6 +10,9 @@ class Chatbox {
     this.state = false;
     this.messages = [];
     this._init();
+
+    // Debug: báo trạng thái marked ngay sau khi khởi tạo (an toàn)
+    console.log('[Chatbox] initialized. marked available?', typeof marked !== 'undefined');
   }
 
   _init() {
@@ -35,6 +38,7 @@ class Chatbox {
 
   _pushUserMessage(text) {
     this.messages.push({ name: 'User', message: text });
+    this.updateChatText();
   }
   _pushBotMessage(text) {
     this.messages.push({ name: 'Bot', message: text });
@@ -57,7 +61,6 @@ class Chatbox {
     if (!text) return;
     this._pushUserMessage(text);
     input.value = '';
-    this.updateChatText();
     this._pushBotTyping();
 
     fetch("/chat", {
@@ -65,17 +68,44 @@ class Chatbox {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message: text })
     })
-    .then(r => r.json())
-    .then(r => {
-      const answer = r.answer || "Xin lỗi, hiện không có câu trả lời.";
-      this._replaceBotTypingWithMessage(answer);
-    })
-    .catch(err => {
-      console.error(err);
-      this._replaceBotTypingWithMessage("⚠️ Lỗi kết nối server.");
-    });
+      .then(async r => {
+        // Debug: log status and raw response text for inspection
+        const contentType = r.headers.get('content-type') || '';
+        let body;
+        try {
+          if (contentType.includes('application/json')) {
+            body = await r.json();
+          } else {
+            body = await r.text();
+          }
+        } catch (e) {
+          console.error('[Chatbox] failed to parse response body', e);
+          body = await r.text().catch(() => null);
+        }
+        console.log('[Chatbox] /chat response (parsed):', body);
+        return body;
+      })
+      .then(r => {
+        // r might be an object or text; try to extract answer
+        let answer = "Xin lỗi, hiện không có câu trả lời.";
+        if (!r) {
+          answer = "⚠️ Lỗi: phản hồi rỗng từ server.";
+        } else if (typeof r === 'object') {
+          // nếu server trả JSON
+          answer = r.answer || r.final_text || JSON.stringify(r);
+        } else if (typeof r === 'string') {
+          answer = r;
+        }
+        console.log('[Chatbox] using answer:', answer);
+        this._replaceBotTypingWithMessage(answer);
+      })
+      .catch(err => {
+        console.error('[Chatbox] fetch error:', err);
+        this._replaceBotTypingWithMessage("⚠️ Lỗi kết nối server.");
+      });
   }
 
+  // Cải tiến: render Markdown nếu có, in ra debug
   updateChatText() {
     const chatbox = this.args.chatBox;
     const container = chatbox.querySelector('.chatbox__messages');
@@ -87,9 +117,46 @@ class Chatbox {
       const rowClass = 'message-row ' + (isBot ? 'bot' : 'user');
       const bubbleClass = 'messages__item ' + (isBot ? 'messages__item--bot' : 'messages__item--user');
       const avatar = `<div class="avatar"><img src="${isBot ? botAvatar : userAvatar}" alt="${m.name}"></div>`;
-      const content = m.typing ? `<span class="typing"><span></span><span></span><span></span></span>` : m.message;
-      return `<div class="${rowClass}">${isBot ? avatar : ''}<div class="${bubbleClass}">${content}</div>${!isBot ? avatar : ''}</div>`;
+
+      let contentHtml;
+      if (m.typing) {
+        contentHtml = `<span class="typing"><span></span><span></span><span></span></span>`;
+      } else {
+        // đảm bảo m.message là string
+        let raw = m.message;
+        if (typeof raw !== 'string') {
+          try { raw = JSON.stringify(raw); } catch(e) { raw = String(raw); }
+        }
+        // debug: log raw message occasionally
+        console.log('[Chatbox] rendering message raw:', raw.slice ? raw.slice(0, 500) : raw);
+
+        try {
+          if (typeof marked !== 'undefined' && typeof marked.parse === 'function') {
+            // use marked to parse markdown -> HTML
+            contentHtml = marked.parse(raw || '');
+          } else {
+            // fallback nhẹ: convert newlines + bold + bullets
+            contentHtml = (raw || "")
+              .replace(/\n/g, "<br>")
+              .replace(/\*\*(.*?)\*\*/g, "<b>$1</b>")
+              .replace(/- (.*?)(?=\n|$)/g, "• $1");
+          }
+        } catch (e) {
+          console.error('[Chatbox] markdown render error', e);
+          contentHtml = (raw || "").replace(/\n/g, "<br>");
+        }
+      }
+
+      return `
+        <div class="${rowClass}">
+          ${isBot ? avatar : ""}
+          <div class="${bubbleClass}">${contentHtml}</div>
+          ${!isBot ? avatar : ""}
+        </div>
+      `;
     }).join('');
+
+    // Auto scroll xuống đáy
     container.scrollTop = container.scrollHeight;
   }
 }
