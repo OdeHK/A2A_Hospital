@@ -38,11 +38,16 @@ app_context: dict[str, Any] = {}
 
 
 DEFAULT_HOST = 'localhost'
-DEFAULT_PORT = 10001
+DEFAULT_PORT = 10002
 DEFAULT_LOG_LEVEL = 'info'
 
 
 
+app_context: dict[str, Any] = {}
+
+DEFAULT_HOST = 'localhost'
+DEFAULT_PORT = 10002
+DEFAULT_LOG_LEVEL = 'info'
 
 # =====================
 # 2. MCP client lifespan

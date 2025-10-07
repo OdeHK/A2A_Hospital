@@ -1,5 +1,3 @@
-# file __main__.py trong thư mục host_agent bản lưu ngày 10/09/2025
-
 import asyncio
 import uuid
 import gradio as gr

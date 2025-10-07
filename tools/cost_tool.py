@@ -1,299 +1,489 @@
-# cost_tool.py (improved)
 import json
 import os
 from pathlib import Path
 from typing import List, Dict, Optional
 import numpy as np
+import asyncio
 import logging
 from functools import lru_cache
 from langchain_core.tools import tool
 from sentence_transformers import SentenceTransformer, util
+from langchain.vectorstores import FAISS
+from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.docstore.document import Document
-from langchain_community.vectorstores import FAISS
-from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage
 from rapidfuzz import fuzz
 
-# Config
-SIM_THRESHOLD = 0.45
-BASE_DIR = Path(__file__).resolve().parent.parent / "data"
-HISTORY_DIR = BASE_DIR / "history"
-HISTORY_DIR.mkdir(parents=True, exist_ok=True)
 
-# Logging
-logging.basicConfig(level=logging.DEBUG,
-                    format='%(asctime)s - %(levelname)s - %(message)s',
-                    handlers=[logging.StreamHandler(),
-                              logging.FileHandler('cost_tool_rag.log', encoding='utf-8')])
+
+# Cấu hình logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler('cost_tool_rag.log')
+    ]
+)
 logger = logging.getLogger(__name__)
 
-# Gemini / Google client init (optional; tool should work without it)
+
+
+# Khởi tạo client Gemini
 def init_gemini_client():
     api_key = os.getenv("GOOGLE_API_KEY")
     if not api_key:
-        logger.warning("GOOGLE_API_KEY chưa thiết lập. Sử dụng chế độ fallback (LLM sẽ không hoạt động).")
-        return None
-    model_name = os.getenv("GOOGLE_GENAI_MODEL", "gemini-pro")
-    return ChatGoogleGenerativeAI(model=model_name, api_key=api_key, temperature=0.2, max_output_tokens=512)
+        raise ValueError("GOOGLE_API_KEY không được thiết lập trong biến môi trường")
+    return ChatGoogleGenerativeAI(
+        model="gemini-1.5-pro",
+        google_api_key=api_key,
+        temperature=0.2,
+        max_output_tokens=512
+    )
 
-_gemini_client = init_gemini_client()
+gemini_client = init_gemini_client()
 
 def call_llm(prompt: str) -> str:
-    if not _gemini_client:
-        logger.debug("LLM không khả dụng, trả empty string từ call_llm.")
-        return ""
+    logger.debug("Gọi Gemini API với prompt: %s", prompt)
     try:
-        logger.debug("Gọi LLM với prompt: %s", prompt[:300])
-        response = _gemini_client.invoke([HumanMessage(content=prompt)])
-        text = getattr(response, "content", None) or str(response)
-        text = text.strip()
-        logger.debug("LLM trả về: %s", text[:400])
-        return text
+        response = gemini_client.invoke([HumanMessage(content=prompt)])
+        logger.debug("Kết quả từ Gemini API: %s", response.content.strip())
+        return response.content.strip()
     except Exception as e:
-        logger.exception("Lỗi gọi LLM: %s", e)
-        return ""
+        logger.error("Lỗi khi gọi Gemini API: %s", str(e))
+        raise RuntimeError(f"Lỗi khi gọi Gemini API: {str(e)}")
 
-# Load embedding model (cached)
-logger.debug("Load embedding model sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+# Load model embedding
 model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
+logger.debug("Đã load model embedding: paraphrase-multilingual-MiniLM-L12-v2")
 
 # Load DB files
+base = Path("/mnt/data")
 try:
-    with open(BASE_DIR / "goi_kham_vip_full.json", "r", encoding="utf-8") as f:
-        vip_data = json.load(f)
+    logger.debug("Đang đọc file disease_specialty.json")
+    with open(base / "disease_specialty.json", "r", encoding="utf-8") as f:
+        disease_specialty = json.load(f)
+    logger.debug("Đang đọc file specialty_package.json")
+    with open(base / "specialty_package.json", "r", encoding="utf-8") as f:
+        specialty_package = json.load(f)
+    logger.debug("Đang đọc file package_cost.json")
+    with open(base / "package_cost.json", "r", encoding="utf-8") as f:
+        package_cost = json.load(f)
 except FileNotFoundError as e:
-    logger.error("Không tìm thấy file dữ liệu trong data/: %s", e)
-    raise
+    logger.error("Không tìm thấy file dữ liệu: %s", str(e))
+    raise FileNotFoundError(f"Không tìm thấy file dữ liệu: {e}")
 
-packages = vip_data.get("packages", [])
+# Preprocess disease variants
+def preprocess_disease_variants(disease_specialty: List[Dict]) -> Dict:
+    # Logger debug
+    logger.debug("Hợp nhất các biến thể bệnh")
+    """Hợp nhất các biến thể bệnh thành một tên chuẩn."""
+    disease_map = {}
+    for item in disease_specialty:
+        disease = item["disease"].lower()
+        base_disease = disease.split(" (")[0].split(" do ")[0].strip()
+        if base_disease not in disease_map or len(disease) < len(disease_map[base_disease]["disease"]):
+            disease_map[base_disease] = item
+    return {v["disease"]: v["specialty"] for v in disease_map.values()}
 
-# Build package index
-package_index = []
-for pkg in packages:
-    text_corpus = pkg.get("name","")
-    for item in pkg.get("items", []):
-        text_corpus += " " + item.get("service_name","")
-    package_index.append({
-        "id": pkg.get("package_id"),
-        "name": pkg.get("name"),
-        "price": pkg.get("price", {}),
-        "items": pkg.get("items", []),
-        "corpus": text_corpus
-    })
+# Build index
+disease_to_specialty = preprocess_disease_variants(disease_specialty)
+specialty_to_packages = {s["specialty"]: s["packages"] for s in specialty_package}
+package_cost_map = {c["id"]: c for c in package_cost}
+disease_list = list(disease_to_specialty.keys())
+logger.debug("Đã tạo index: %d bệnh, %d chuyên khoa, %d gói", len(disease_list), len(specialty_to_packages), len(package_cost_map))
 
-@lru_cache(maxsize=4096)
-def cached_embedding(text: str, to_tensor: bool = False):
-    return model.encode(text, convert_to_tensor=to_tensor)
 
-def save_history(session_id: str, entry: dict):
-    path = HISTORY_DIR / f"history_{session_id}.json"
+# Helpers
+@lru_cache(maxsize=1000)
+def cached_embedding(text: str) -> np.ndarray:
+    """Cache kết quả embedding để tối ưu hiệu suất."""
+    logger.debug("Tính embedding cho: %s", text[:50])
+    return model.encode(text)
+
+def normalize_disease_rag(disease: str, disease_list: List[str]) -> str:
+    logger.debug("Chuẩn hóa bệnh: %s", disease)
+    disease = disease.strip().lower()
+    disease_embeddings = model.encode([disease] + disease_list, convert_to_tensor=True)
+    similarities = util.cos_sim(disease_embeddings[0], disease_embeddings[1:])
+    top_indices = np.argsort(similarities[0])[-10:]
+    filtered_disease_list = [disease_list[i] for i in top_indices]
+    logger.debug("Top 10 bệnh tương đồng: %s", filtered_disease_list)
+    if similarities[0][top_indices[-1]] > 0.8:
+        logger.debug("Khớp embedding: %s", filtered_disease_list[-1])
+        return filtered_disease_list[-1]
     try:
-        if path.exists():
-            existing = json.loads(path.read_text(encoding="utf-8"))
-        else:
-            existing = []
-        existing.append(entry)
-        path.write_text(json.dumps(existing, ensure_ascii=False, indent=2), encoding="utf-8")
-        logger.debug("Lưu history cho session %s", session_id)
+        llm_prompt = f"Chuẩn hóa tên bệnh '{disease}' dựa trên danh sách: {filtered_disease_list}"
+        llm_response = call_llm(llm_prompt)
+        logger.debug("Kết quả chuẩn hóa từ LLM: %s", llm_response)
+        return llm_response.strip().capitalize()
+    except RuntimeError:
+        logger.warning("Fallback: trả về bệnh gốc: %s", disease)
+        return disease.capitalize()
+
+def build_vector_store(pdf_results: List[Dict]) -> FAISS:
+    """Tạo vector store từ pdf_results."""
+    documents = [Document(page_content=item["snippet"], metadata={"page_id": item["page_id"]}) for item in pdf_results]
+    embeddings = HuggingFaceEmbeddings(model_name="paraphrase-multilingual-MiniLM-L12-v2")
+    return FAISS.from_documents(documents, embeddings)
+
+
+def extract_diseases_fallback(data: dict, disease_list: List[str]) -> List[str]:
+    logger.debug("Fallback: Tìm kiếm bệnh bằng fuzzy matching")
+    diseases = []
+    pdf_results = data.get("pdf_results", [])
+    for item in pdf_results:
+        snippet = item.get("snippet", "").lower()
+        for disease in disease_list:
+            if fuzz.partial_ratio(disease.lower(), snippet) > 80 and disease not in diseases:
+                diseases.append(disease)
+                logger.debug("Tìm thấy bệnh trong snippet: %s", disease)
+    if not diseases and "synthesized_answer" in data:
+        text = data["synthesized_answer"].lower()
+        for disease in disease_list:
+            if fuzz.partial_ratio(disease.lower(), text) > 80 and disease not in diseases:
+                diseases.append(disease)
+                logger.debug("Tìm thấy bệnh trong synthesized_answer: %s", disease)
+    logger.debug("Kết quả fallback: %s", diseases)
+    return list(set(diseases))
+
+
+def extract_diseases_rag(data: dict, disease_list: List[str]) -> List[str]:
+    logger.debug("Trích xuất bệnh bằng RAG từ data: %s", data)
+    pdf_results = data.get("pdf_results", [])
+    diseases = []
+    try:
+        vector_store = build_vector_store(pdf_results)
+        query = " ".join(data.get("extracted_symptoms", [])) + " " + data.get("synthesized_answer", "")
+        logger.debug("Query cho FAISS: %s", query)
+        retrieved_docs = vector_store.similarity_search(query, k=5)
+        context = "\n".join([doc.page_content for doc in retrieved_docs])
+        logger.debug("Ngữ cảnh từ FAISS: %s", context[:200])
+        llm_prompt = f"Dựa trên triệu chứng và ngữ cảnh sau, liệt kê các bệnh liên quan từ danh sách {disease_list}:\n{context}"
+        llm_response = call_llm(llm_prompt)
+        extracted_diseases = [d.strip().capitalize() for d in llm_response.split(",") if d.strip() in disease_list]
+        diseases.extend(extracted_diseases)
+        logger.debug("Bệnh trích xuất từ LLM: %s", extracted_diseases)
+    except RuntimeError:
+        logger.warning("Lỗi RAG, chuyển sang fallback")
+        diseases.extend(extract_diseases_fallback(data, disease_list))
+    return list(set(diseases))
+
+
+import json
+import os
+from pathlib import Path
+from typing import List, Dict, Optional
+import numpy as np
+import asyncio
+import logging
+from functools import lru_cache
+from langchain_core.tools import tool
+from sentence_transformers import SentenceTransformer, util
+from langchain.vectorstores import FAISS
+from langchain.embeddings import HuggingFaceEmbeddings
+from langchain.docstore.document import Document
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.messages import HumanMessage
+from rapidfuzz import fuzz
+
+# Cấu hình logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler('cost_tool_rag.log')
+    ]
+)
+logger = logging.getLogger(__name__)
+
+# Khởi tạo client Gemini
+def init_gemini_client():
+    api_key = os.getenv("GOOGLE_API_KEY")
+    if not api_key:
+        logger.error("GOOGLE_API_KEY không được thiết lập")
+        raise ValueError("GOOGLE_API_KEY không được thiết lập trong biến môi trường")
+    logger.debug("Khởi tạo Gemini client với model gemini-1.5-pro")
+    return ChatGoogleGenerativeAI(
+        model="gemini-1.5-pro",
+        google_api_key=api_key,
+        temperature=0.2,
+        max_output_tokens=512
+    )
+
+gemini_client = init_gemini_client()
+
+def call_llm(prompt: str) -> str:
+    logger.debug("Gọi Gemini API với prompt: %s", prompt)
+    try:
+        response = gemini_client.invoke([HumanMessage(content=prompt)])
+        logger.debug("Kết quả từ Gemini API: %s", response.content.strip())
+        return response.content.strip()
     except Exception as e:
-        logger.exception("Lỗi lưu history: %s", e)
+        logger.error("Lỗi khi gọi Gemini API: %s", str(e))
+        raise RuntimeError(f"Lỗi khi gọi Gemini API: {str(e)}")
 
-def fuzzy_find_by_query(query: str, top_k: int = 5) -> List[Dict]:
-    # loose token overlap fallback
-    qtokens = set([t.lower() for t in query.split() if t.strip()])
-    loose = []
-    for pkg in package_index:
-        name_tokens = set([t.lower() for t in pkg["name"].split()])
-        overlap = len(qtokens & name_tokens)
-        if overlap > 0:
-            score = overlap / max(1, len(name_tokens))
-            loose.append({
-                "id": pkg["id"],
-                "name": pkg["name"],
-                "price": pkg["price"],
-                "items": pkg["items"][:5],
-                "relevance_score": round(float(score),4),
-                "matched_on": "loose_token"
-            })
-    loose = sorted(loose, key=lambda x: x["relevance_score"], reverse=True)[:top_k]
-    return loose
+# Load model embedding
+model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
+logger.debug("Đã load model embedding: paraphrase-multilingual-MiniLM-L12-v2")
 
-def search_packages_by_embedding(query: str, top_k: int = 5) -> List[Dict]:
+# Load DB files
+base = Path("/mnt/data")
+try:
+    logger.debug("Đang đọc file disease_specialty.json")
+    with open(base / "disease_specialty.json", "r", encoding="utf-8") as f:
+        disease_specialty = json.load(f)
+    logger.debug("Đang đọc file specialty_package.json")
+    with open(base / "specialty_package.json", "r", encoding="utf-8") as f:
+        specialty_package = json.load(f)
+    logger.debug("Đang đọc file package_cost.json")
+    with open(base / "package_cost.json", "r", encoding="utf-8") as f:
+        package_cost = json.load(f)
+except FileNotFoundError as e:
+    logger.error("Không tìm thấy file dữ liệu: %s", str(e))
+    raise FileNotFoundError(f"Không tìm thấy file dữ liệu: {e}")
+
+# Preprocess disease variants
+def preprocess_disease_variants(disease_specialty: List[Dict]) -> Dict:
+    logger.debug("Hợp nhất các biến thể bệnh")
+    disease_map = {}
+    for item in disease_specialty:
+        disease = item["disease"].lower()
+        base_disease = disease.split(" (")[0].split(" do ")[0].strip()
+        if base_disease not in disease_map or len(disease) < len(disease_map[base_disease]["disease"]):
+            disease_map[base_disease] = item
+    return {v["disease"]: v["specialty"] for v in disease_map.values()}
+
+disease_to_specialty = preprocess_disease_variants(disease_specialty)
+specialty_to_packages = {s["specialty"]: s["packages"] for s in specialty_package}
+package_cost_map = {c["id"]: c for c in package_cost}
+disease_list = list(disease_to_specialty.keys())
+logger.debug("Đã tạo index: %d bệnh, %d chuyên khoa, %d gói", len(disease_list), len(specialty_to_packages), len(package_cost_map))
+
+# Helpers
+@lru_cache(maxsize=1000)
+def cached_embedding(text: str) -> np.ndarray:
+    logger.debug("Tính embedding cho: %s", text[:50])
+    return model.encode(text)
+
+def normalize_disease_rag(disease: str, disease_list: List[str]) -> str:
+    logger.debug("Chuẩn hóa bệnh: %s", disease)
+    disease = disease.strip().lower()
+    disease_embeddings = model.encode([disease] + disease_list, convert_to_tensor=True)
+    similarities = util.cos_sim(disease_embeddings[0], disease_embeddings[1:])
+    top_indices = np.argsort(similarities[0])[-10:]
+    filtered_disease_list = [disease_list[i] for i in top_indices]
+    logger.debug("Top 10 bệnh tương đồng: %s", filtered_disease_list)
+    if similarities[0][top_indices[-1]] > 0.8:
+        logger.debug("Khớp embedding: %s", filtered_disease_list[-1])
+        return filtered_disease_list[-1]
     try:
-        corpus = [pkg["corpus"] for pkg in package_index]
-        emb_all = model.encode([query] + corpus, convert_to_tensor=True)
-        sims = util.cos_sim(emb_all[0], emb_all[1:])[0].cpu().numpy()
-        idxs = np.argsort(sims)[::-1][:top_k]
-        results = []
-        for idx in idxs:
-            pkg = package_index[int(idx)]
-            results.append({
-                "id": pkg["id"],
-                "name": pkg["name"],
-                "price": pkg["price"],
-                "items": pkg["items"][:5],
-                "relevance_score": float(sims[int(idx)]),
-                "matched_on": "query_fulltext"
-            })
-        return results
-    except Exception as e:
-        logger.exception("search_packages_by_embedding lỗi: %s", e)
-        return []
+        llm_prompt = f"Chuẩn hóa tên bệnh '{disease}' dựa trên danh sách: {filtered_disease_list}"
+        llm_response = call_llm(llm_prompt)
+        logger.debug("Kết quả chuẩn hóa từ LLM: %s", llm_response)
+        return llm_response.strip().capitalize()
+    except RuntimeError:
+        logger.warning("Fallback: trả về bệnh gốc: %s", disease)
+        return disease.capitalize()
 
-def extract_diseases_from_parts(parts: List[str]) -> List[str]:
-    # simple heuristic from earlier agent (keep short)
-    if not parts:
-        return []
-    text = "\n".join(parts).lower()
-    candidates = []
-    for line in text.splitlines():
-        s = line.strip()
-        if not s: continue
-        # detect bullets or numbered lists
-        if s.startswith("-") or s.startswith("*") or s[0].isdigit():
-            cand = s.lstrip("-*0123456789. ").strip()
-            if cand:
-                candidates.append(cand)
-    # fallback: look for "bệnh", "có thể", "có thể mắc"
-    m = []
-    for w in ["bệnh", "có thể", "có thể mắc", "có thể là", "các bệnh"]:
-        if w in text:
-            # split heuristically by commas
-            parts_split = text.split(w,1)[1]
-            for p in parts_split.replace(";",",").split(","):
-                p = p.strip()
-                if p:
-                    candidates.append(p)
-    # dedupe
-    cleaned = []
-    for c in candidates:
-        c2 = c.strip().rstrip(".")
-        if c2 and c2 not in cleaned:
-            cleaned.append(c2)
-    return cleaned
+def build_vector_store(pdf_results: List[Dict]) -> FAISS:
+    logger.debug("Tạo vector store với %d pdf_results", len(pdf_results))
+    documents = [Document(page_content=item["snippet"], metadata={"page_id": item["page_id"]}) for item in pdf_results]
+    embeddings = HuggingFaceEmbeddings(model_name="paraphrase-multilingual-MiniLM-L12-v2")
+    return FAISS.from_documents(documents, embeddings)
 
-def compute_relevance_simple(pkg_corpus: str, seed_text: str, symptoms: List[str]) -> float:
+def extract_diseases_fallback(data: dict, disease_list: List[str]) -> List[str]:
+    logger.debug("Fallback: Tìm kiếm bệnh bằng fuzzy matching")
+    diseases = []
+    pdf_results = data.get("pdf_results", [])
+    for item in pdf_results:
+        snippet = item.get("snippet", "").lower()
+        for disease in disease_list:
+            if fuzz.partial_ratio(disease.lower(), snippet) > 80 and disease not in diseases:
+                diseases.append(disease)
+                logger.debug("Tìm thấy bệnh trong snippet: %s", disease)
+    if not diseases and "synthesized_answer" in data:
+        text = data["synthesized_answer"].lower()
+        for disease in disease_list:
+            if fuzz.partial_ratio(disease.lower(), text) > 80 and disease not in diseases:
+                diseases.append(disease)
+                logger.debug("Tìm thấy bệnh trong synthesized_answer: %s", disease)
+    logger.debug("Kết quả fallback: %s", diseases)
+    return list(set(diseases))
+
+def extract_diseases_rag(data: dict, disease_list: List[str]) -> List[str]:
+    logger.debug("Trích xuất bệnh bằng RAG từ data: %s", data)
+    pdf_results = data.get("pdf_results", [])
+    diseases = []
     try:
-        query = f"{seed_text} {' '.join(symptoms)}".strip()
-        emb = model.encode([query, pkg_corpus], convert_to_tensor=True)
-        score = float(util.cos_sim(emb[0], emb[1]).cpu().numpy()[0][0])
-    except Exception:
-        score = 0.0
-    # Try LLM blend if available (optional)
-    if _gemini_client:
-        try:
-            llm_prompt = f"Trả về điểm từ 0 đến 1 cho mức độ phù hợp của gói mô tả: '{pkg_corpus}' với bệnh '{seed_text}' và triệu chứng {symptoms}."
-            resp = call_llm(llm_prompt)
-            # try parse leading float
-            llm_score = float(resp.strip().split()[0])
-            return 0.7*score + 0.3*llm_score
-        except Exception:
-            pass
-    return score
+        vector_store = build_vector_store(pdf_results)
+        query = " ".join(data.get("extracted_symptoms", [])) + " " + data.get("synthesized_answer", "")
+        logger.debug("Query cho FAISS: %s", query)
+        retrieved_docs = vector_store.similarity_search(query, k=5)
+        context = "\n".join([doc.page_content for doc in retrieved_docs])
+        logger.debug("Ngữ cảnh từ FAISS: %s", context[:200])
+        llm_prompt = f"Dựa trên triệu chứng và ngữ cảnh sau, liệt kê các bệnh liên quan từ danh sách {disease_list}:\n{context}"
+        llm_response = call_llm(llm_prompt)
+        extracted_diseases = [d.strip().capitalize() for d in llm_response.split(",") if d.strip() in disease_list]
+        diseases.extend(extracted_diseases)
+        logger.debug("Bệnh trích xuất từ LLM: %s", extracted_diseases)
+    except RuntimeError:
+        logger.warning("Lỗi RAG, chuyển sang fallback")
+        diseases.extend(extract_diseases_fallback(data, disease_list))
+    return list(set(diseases))
 
-def search_packages_smart(user_query: str, disease_candidates: Optional[List[str]] = None, top_k: int = 5) -> List[Dict]:
-    """Multi-strategy: if disease_candidates present, do disease-centric search; else query-based search."""
+def map_disease_to_specialty(disease: str, disease_to_specialty: Dict, symptoms: List[str]) -> Optional[str]:
+    logger.debug("Ánh xạ bệnh %s sang chuyên khoa", disease)
+    specialty = disease_to_specialty.get(disease)
+    if specialty:
+        logger.debug("Tìm thấy chuyên khoa: %s", specialty)
+        return specialty
     try:
-        disease_candidates = disease_candidates or []
-        results = []
-        # Strategy A: disease-centric
-        if disease_candidates:
-            symptoms = user_query.split()[:20]
-            for pkg in package_index:
-                best_score = 0.0
-                for d in disease_candidates:
-                    score = compute_relevance_simple(pkg["corpus"], d, symptoms)
-                    if score > best_score:
-                        best_score = score
-                        best_match = d
-                if best_score > 0:
-                    results.append({
-                        "id": pkg["id"],
-                        "name": pkg["name"],
-                        "price": pkg["price"],
-                        "items": pkg["items"][:5],
-                        "relevance_score": round(float(best_score),4),
-                        "matched_on": f"disease:{best_match}"
-                    })
-            results = sorted(results, key=lambda x: x["relevance_score"], reverse=True)[:top_k]
-            if results:
-                return results
-        # Strategy B: embedding query
-        emb_results = search_packages_by_embedding(user_query, top_k=top_k)
-        if emb_results:
-            return emb_results
-        # Strategy C: fuzzy token
-        return fuzzy_find_by_query(user_query, top_k=top_k)
-    except Exception as e:
-        logger.exception("search_packages_smart lỗi: %s", e)
-        return []
+        llm_prompt = f"Bệnh '{disease}' với triệu chứng {symptoms} thuộc chuyên khoa nào? Trả về một trong: {list(specialty_to_packages.keys())}"
+        specialty = call_llm(llm_prompt).strip()
+        logger.debug("Chuyên khoa từ LLM: %s", specialty)
+        return specialty if specialty in specialty_to_packages else None
+    except RuntimeError:
+        logger.warning("Không tìm thấy chuyên khoa cho bệnh: %s", disease)
+        return None
 
-# ==== Tool exposed to agent ====
+def compute_relevance(description: str, disease: str, symptoms: List[str]) -> float:
+    logger.debug("Tính relevance_score cho bệnh %s, triệu chứng %s", disease, symptoms)
+    query = f"{disease} {' '.join(symptoms)}"
+    embeddings = model.encode([query, description], convert_to_tensor=True)
+    score = util.cos_sim(embeddings[0], embeddings[1])[0][0].item()
+    logger.debug("Embedding score: %f", score)
+    try:
+        llm_prompt = f"Đánh giá mức độ phù hợp của gói dịch vụ '{description}' với bệnh '{disease}' và triệu chứng {symptoms}. Trả về điểm từ 0 đến 1."
+        llm_score = float(call_llm(llm_prompt))
+        logger.debug("LLM score: %f", llm_score)
+        return 0.7 * score + 0.3 * llm_score
+    except RuntimeError:
+        logger.warning("Fallback: chỉ dùng embedding score")
+        return score
+
+def enrich_packages_for_specialty_rag(specialty: str, disease: str, symptoms: List[str]) -> List[Dict]:
+    logger.debug("Lấy gói dịch vụ cho chuyên khoa: %s", specialty)
+    pkgs = specialty_to_packages.get(specialty, [])
+    enriched = []
+    for p in pkgs:
+        cost = package_cost_map.get(p["id"], {})
+        relevance_score = compute_relevance(p["description"], disease, symptoms)
+        enriched.append({
+            "id": p["id"],
+            "name": p["name"],
+            "description": p["description"],
+            "cost_min": cost.get("min"),
+            "cost_max": cost.get("max"),
+            "currency": cost.get("currency"),
+            "relevance_score": relevance_score
+        })
+        logger.debug("Gói %s, relevance_score: %f", p["name"], relevance_score)
+    return sorted(enriched, key=lambda x: x["relevance_score"], reverse=True)
+
+# ==== Cost Tool as LangChain Tool ====
 @tool
-async def cost_tool_rag(agent_output: Dict) -> Dict:
+async def cost_tool_rag(agent_output: dict) -> Dict:
     """
-    Expected input dict can contain:
-      {
-        "session_id": str,
-        "user_query": str,
-        "final_response_parts": list[str],  # optional
-        "intent": "cost-only"|"symptom"|"symptom+cost"|"unknown",
-        "disease_candidates": list[str]  # optional
-      }
-    Returns standardized dict:
-      {"status": "completed"|"no_match"|"error", "message": "...", "data": {"packages": [...], "input": ...}}
+    Công cụ phân tích bệnh, chuyên khoa, gói dịch vụ và chi phí dựa trên đầu ra từ symptom_agent.
+
+    Mô tả tổng quan
+    ---------------
+    Công cụ này nhận đầu ra từ `search_symptoms` hoặc một agent tương tự, phân tích để trích xuất bệnh,
+    ánh xạ sang chuyên khoa, và đề xuất các gói dịch vụ kèm chi phí. Sử dụng RAG (Retrieval-Augmented Generation)
+    để chuẩn hóa tên bệnh, trích xuất bệnh từ ngữ cảnh, và ưu tiên gói dịch vụ phù hợp. Quy trình gồm:
+      1. Trích xuất bệnh từ `pdf_results` và `synthesized_answer` bằng FAISS và Google Gemini API.
+      2. Chuẩn hóa tên bệnh bằng embedding và Gemini API fallback.
+      3. Ánh xạ bệnh sang chuyên khoa, sử dụng RAG nếu không tìm thấy trực tiếp.
+      4. Lấy danh sách gói dịch vụ cho từng chuyên khoa, xếp hạng theo mức độ liên quan.
+      5. Trả về kết quả dạng JSON với danh sách bệnh, chuyên khoa, gói dịch vụ và chi phí.
+
+    Tham số
+    --------
+    agent_output : dict
+        Đầu ra từ `search_symptoms` hoặc tương tự, chứa các trường:
+        - status: str (trạng thái xử lý)
+        - message: str (thông điệp tóm tắt)
+        - data: dict (chứa extracted_symptoms, pdf_results, synthesized_answer)
+
+    Giá trị trả về
+    -------------
+    Trả về một dict với các trường:
+      - status: str ('completed' | 'error')
+      - message: str (thông điệp tóm tắt)
+      - data: dict, chứa:
+          * input_diseases: List[str] (danh sách bệnh trích xuất)
+          * specialties: List[dict] (danh sách chuyên khoa và gói dịch vụ kèm chi phí)
+
+    Yêu cầu
+    -------
+      - File dữ liệu: disease_specialty.json, specialty_package.json, package_cost.json
+      - Thư viện: sentence-transformers, langchain, faiss-cpu, langchain-google-genai
+      - Biến môi trường: GOOGLE_API_KEY cho Gemini API
+      - Nếu Gemini API không khả dụng, công cụ sẽ fallback về tìm kiếm từ khóa đơn giản.
+
+    Xử lý lỗi
+    ----------
+      - Nếu file dữ liệu không tồn tại, trả về status='error'.
+      - Nếu Gemini API không khả dụng, sử dụng tìm kiếm từ khóa cơ bản.
+      - Xử lý lỗi bất đồng bộ và đảm bảo hiệu suất với caching.
+
+    Ví dụ
+    -----
+    >>> agent_output = {
+    ...     "status": "completed",
+    ...     "message": "Các bệnh có thể liên quan: Xơ gan, Tăng áp lực tĩnh mạch cửa",
+    ...     "data": {
+    ...         "extracted_symptoms": ["vàng da", "mệt mỏi"],
+    ...         "pdf_results": [
+    ...             {"page_id": 21, "snippet": "CHƯƠNG 166 ... Tăng áp lực tĩnh mạch cửa ..."},
+    ...             {"page_id": 13, "snippet": "CHƯƠNG 165 ... Xơ gan và bệnh gan do rượu ..."}
+    ...         ],
+    ...         "synthesized_answer": "Các bệnh có thể liên quan: Xơ gan, Tăng áp lực tĩnh mạch cửa"
+    ...     }
+    ... }
+    >>> result = await cost_tool_rag(agent_output)
+    >>> print(result)
     """
-    logger.debug("cost_tool_rag called with keys: %s", list(agent_output.keys()))
+    logger.debug("Gọi cost_tool_rag với đầu vào: %s", agent_output)
     try:
-        if not isinstance(agent_output, dict):
-            raise ValueError("agent_output phải là dict")
+        data = agent_output.get("data", {})
+        logger.debug("Data từ agent_output: %s", data)
+        diseases = extract_diseases_rag(data, disease_list)
+        logger.debug("Bệnh trích xuất: %s", diseases)
+        diseases = [normalize_disease_rag(d, disease_list) for d in diseases]
+        logger.debug("Bệnh sau chuẩn hóa: %s", diseases)
 
-        session_id = agent_output.get("session_id", "unknown")
-        user_query = agent_output.get("user_query", "") or ""
-        final_response_parts = agent_output.get("final_response_parts", []) or []
-        intent = agent_output.get("intent", "unknown")
-        disease_candidates = agent_output.get("disease_candidates", []) or []
+        specialties = []
+        symptoms = data.get("extracted_symptoms", [])
+        for d in diseases:
+            sp = map_disease_to_specialty(d, disease_to_specialty, symptoms)
+            if sp and sp not in specialties:
+                specialties.append(sp)
+        logger.debug("Chuyên khoa: %s", specialties)
 
-        # If final_response_parts exists and disease_candidates empty, try to extract diseases
-        if final_response_parts and not disease_candidates:
-            disease_candidates = extract_diseases_from_parts(final_response_parts)
-
-        # If still empty and intent implies cost-only but query contains explicit disease name,
-        # attempt fuzzy extraction from query against package corpuses
-        if not disease_candidates and intent in ("cost-only", "unknown"):
-            # heuristics: look for keywords like 'viêm', 'ung thư', 'gan', 'tim', 'thần kinh'
-            heur = []
-            for token in ["viêm", "ung", "gan", "tim", "thần kinh", "dạ dày", "đại trực tràng", "tiêu hóa"]:
-                if token in user_query.lower():
-                    heur.append(token)
-            if heur:
-                disease_candidates = [user_query]
-
-        # Search packages smartly
-        packages_found = search_packages_smart(user_query, disease_candidates, top_k=5)
-
-        if not packages_found:
-            msg = "Không tìm thấy gói khám phù hợp trong dữ liệu."
-            result = {"status": "no_match", "message": msg, "data": {"packages": [], "input_query": user_query}}
-            save_history(session_id, {"type":"cost_tool_rag", "input": agent_output, "result": result})
-            return result
+        specialty_packages = []
+        for sp in specialties:
+            enriched_pkgs = enrich_packages_for_specialty_rag(sp, diseases[0] if diseases else "", symptoms)
+            specialty_packages.append({"specialty": sp, "packages": enriched_pkgs})
+        logger.debug("Gói dịch vụ: %s", specialty_packages)
 
         result = {
             "status": "completed",
-            "message": f"Tìm thấy {len(packages_found)} gói khám phù hợp.",
+            "message": "Xử lý thành công",
             "data": {
-                "input_query": user_query,
-                "intent": intent,
-                "disease_candidates": disease_candidates,
-                "packages": packages_found
+                "input_diseases": diseases,
+                "specialties": specialty_packages
             }
         }
-
-        save_history(session_id, {"type":"cost_tool_rag", "input": agent_output, "result": result})
-        logger.debug("cost_tool_rag completed: found %d", len(packages_found))
+        logger.debug("Kết quả cost_tool_rag: %s", result)
         return result
-
     except Exception as e:
-        logger.exception("Error in cost_tool_rag: %s", e)
-        return {"status": "error", "message": str(e), "data": None}
+        logger.error("Lỗi trong cost_tool_rag: %s", str(e))
+        return {
+            "status": "error",
+            "message": f"Lỗi khi xử lý: {str(e)}",
+            "data": None
+        }

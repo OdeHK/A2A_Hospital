@@ -1,36 +1,25 @@
-# Fixed routing_agent: explicit intent classification + task_id handling
-# Created to replace original routing_agent.py to ensure:
-# - Symptom-only queries go only to Symptom Agent
-# - Cost-only queries go only to Cost Agent
-# - Combined queries call Symptom Agent first, then Cost Agent
-# - Do NOT forward a task_id that belongs to another agent (this caused "Task ... was specified but does not exist")
-
-# NOTE: paste this file back as host_agent/routing_agent.py (or replace original) and restart your services.
-
-# Bản sửa lúc 2025-09-19
 import asyncio
 import base64
 import json
 import uuid
 from typing import Any, Dict, List
-from types import SimpleNamespace
-import re
-import html
+
 
 import logging
-import sys
 logger = logging.getLogger("HostAgent")
 logger.setLevel(logging.DEBUG)
 # add handler if none
 if not logger.handlers:
+    import sys
     ch = logging.StreamHandler(sys.stdout)
     ch.setLevel(logging.DEBUG)
     ch.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(name)s - %(message)s"))
     logger.addHandler(ch)
 
+
 import httpx
 
-from a2a.client.card_resolver import A2ACardResolver
+from a2a.client import A2ACardResolver
 from a2a.types import (
     AgentCard,
     DataPart,
@@ -47,67 +36,17 @@ from google.adk.agents.callback_context import CallbackContext
 from google.adk.agents.readonly_context import ReadonlyContext
 from google.adk.tools.tool_context import ToolContext
 from google.genai import types
-from google.adk.sessions.session import Session
-from google.adk.agents.callback_context import CallbackContext
-from google.adk.agents.invocation_context import InvocationContext, new_invocation_context_id
-from google.adk.sessions.base_session_service import BaseSessionService
-from google.adk.agents.base_agent import BaseAgent
+
 from .remote_agent_connection import RemoteAgentConnections, TaskUpdateCallback
-from langchain.schema import SystemMessage, HumanMessage
 
 
-from dotenv import load_dotenv
-import os
-logger = logging.getLogger(__name__)
-
-# Load biến môi trường từ .env
-load_dotenv(override=True)
-
-# ====== Kiểm tra phụ thuộc và API key ======
-HAS_LLM = False
-if not os.getenv("GOOGLE_API_KEY"):
-    logger.error("GOOGLE_API_KEY not set")
-else:
-    try:
-        from langchain_google_genai import ChatGoogleGenerativeAI
-        HAS_LLM = True
-    except ImportError:
-        logger.warning("langchain_google_genai not installed. LLM disabled.")
-
-# --- Minimal Dummy session/agent utilities (unchanged) ---
-class DummySessionService(BaseSessionService):
-    def __init__(self, session: Session):
-        self._session = session
-
-    async def save_session(self, session: Session) -> None:
-        self._session = session
-
-    async def load_session(self, session_id: str) -> Session:
-        return self._session
-
-    async def create_session(self, session: Session) -> None:
-        self._session = session
-
-    async def delete_session(self, session_id: str) -> None:
-        self._session = None
-
-    async def get_session(self, session_id: str) -> Session:
-        return self._session
-
-    async def list_sessions(self) -> list[Session]:
-        return [self._session] if self._session else []
-
-class DummyAgent(BaseAgent):
-    def __init__(self):
-        super().__init__(name="dummy")
-
-# --- HostAgent ---
 class HostAgent:
     """The host agent.
 
-    Responsibilities:
-      - route user input to the correct remote agent(s) based on a simple intent classifier
-      - avoid passing task ids across agents (a major cause of the "task not found" error)
+    This agent orchestrates a 3-step care flow:
+      1) send symptom text to SymptomAgent -> get differential diagnosis + tests
+      2) send summary to CostAgent -> get packages & prices
+      3) optionally send booking request to BookingAgent
     """
 
     def __init__(
@@ -116,58 +55,14 @@ class HostAgent:
         http_client: httpx.AsyncClient,
         task_callback: TaskUpdateCallback | None = None,
     ):
-        # remote state
+        self.task_callback = task_callback
         self.httpx_client = http_client
         self.remote_agent_connections: dict[str, RemoteAgentConnections] = {}
         self.cards: dict[str, AgentCard] = {}
         self.agents: str = ''
-
-        # container to accumulate streaming tasks
-        self._tasks: dict[str, SimpleNamespace] = {}
-
-        # callback default
-        if task_callback is None:
-            self.task_callback = self._default_task_callback
-        else:
-            self.task_callback = task_callback
-
         loop = asyncio.get_running_loop()
-        # Start background init
+        # Start background init (it's still possible to wait synchronously later).
         loop.create_task(self.init_remote_agent_addresses(remote_agent_addresses))
-
-        # Intent keyword sets (can be tuned)
-        self._symptom_keywords = [
-            "triệu chứng",
-            "triệu chứng này",
-            "bị",
-            "nôn",
-            "đau",
-            "ho",
-            "sốt",
-            "chảy máu",
-            "phân đen",
-            "nôn ra máu",
-            "nội soi",
-            "giãn tĩnh mạch",
-            "bệnh gì",
-        ]
-        self._cost_keywords = [
-            "chi phí",
-            "giá",
-            "gói khám",
-            "bao nhiêu",
-            "tốn",
-            "chi phí khám",
-            "giá tiền",
-        ]
-        self._booking_keywords = [
-            "đặt lịch",
-            "hẹn khám",
-            "booking",
-            "đặt khám",
-            "muốn đặt",
-            "muốn hẹn",
-        ]
 
     async def init_remote_agent_addresses(
         self, remote_agent_addresses: list[str]
@@ -175,6 +70,7 @@ class HostAgent:
         async with asyncio.TaskGroup() as task_group:
             for address in remote_agent_addresses:
                 task_group.create_task(self.retrieve_card(address))
+        # Once completed, self.agents is populated by register_agent_card.
 
     async def retrieve_card(self, address: str):
         card_resolver = A2ACardResolver(self.httpx_client, address)
@@ -208,24 +104,25 @@ class HostAgent:
         )
 
     def root_instruction(self, context: ReadonlyContext) -> str:
+        """Clear instruction so model will prefer orchestration tool for combined requests."""
         current_agent = self.check_state(context)
         return f"""
-            Bạn là điều phối viên. KHÔNG trả lời trực tiếp khi có thể sử dụng tools.
-            Nếu người dùng mô tả TRIỆU CHỨNG và/hoặc hỏi về GÓI KHÁM / CHI PHÍ / ĐẶT LỊCH:
-            - Sử dụng tool `orchestrate_care_flow(message)` để chạy luồng:
-                1) Gọi SymptomAgent phân tích triệu chứng và đưa ra các chẩn đoán gợi ý + danh sách xét nghiệm cần làm.
-                2) Gọi CostAgent với tóm tắt từ SymptomAgent để lấy các gói khám & chi phí đề xuất.
-                3) Nếu người dùng rõ ràng muốn ĐẶT LỊCH, gọi BookingAgent để đặt lịch.
-            - Nếu chỉ cần 1 bước đơn giản, có thể dùng `send_message(agent_name, message)` trực tiếp.
+Bạn là điều phối viên. KHÔNG trả lời trực tiếp khi có thể sử dụng tools.
+Nếu người dùng mô tả TRIỆU CHỨNG và/hoặc hỏi về GÓI KHÁM / CHI PHÍ / ĐẶT LỊCH:
+  - Sử dụng tool `orchestrate_care_flow(message)` để chạy luồng:
+      1) Gọi SymptomAgent phân tích triệu chứng và đưa ra các chẩn đoán gợi ý + danh sách xét nghiệm cần làm.
+      2) Gọi CostAgent với tóm tắt từ SymptomAgent để lấy các gói khám & chi phí đề xuất.
+      3) Nếu người dùng rõ ràng muốn ĐẶT LỊCH, gọi BookingAgent để đặt lịch.
+  - Nếu chỉ cần 1 bước đơn giản, có thể dùng `send_message(agent_name, message)` trực tiếp.
 
-            Luôn bắt đầu bằng `list_remote_agents()` nếu cần kiểm tra agent hiện có.
-            Không bịa thông tin. Trả lời cuối cùng phải tổng hợp kết quả từ các agent đã gọi.
+Luôn bắt đầu bằng `list_remote_agents()` nếu cần kiểm tra agent hiện có.
+Không bịa thông tin. Trả lời cuối cùng phải tổng hợp kết quả từ các agent đã gọi.
 
-            Agents hiện có:
-            {self.agents}
+Agents hiện có:
+{self.agents}
 
-            Current agent: {current_agent['active_agent']}
-                    """
+Current agent: {current_agent['active_agent']}
+        """
 
     def check_state(self, context: ReadonlyContext):
         state = context.state
@@ -246,6 +143,7 @@ class HostAgent:
             state['session_active'] = True
 
     def list_remote_agents(self):
+        """List the available remote agents you can use to delegate the task."""
         if not self.remote_agent_connections:
             return []
 
@@ -256,208 +154,14 @@ class HostAgent:
             )
         return remote_agent_info
 
-
-    def _format_response(self, parts: List[Any]) -> str:
-        """
-        Định dạng kết quả từ các agent (Symptom / Cost / Booking) thành văn bản rõ ràng.
-        - Tự detect loại dữ liệu: Symptom (triệu chứng + bệnh), Cost (chi phí), Booking.
-        - Nếu có JSON, ưu tiên parse để lấy dữ liệu structured.
-        - Nếu có nhiều phần trùng nhau, tự động loại bỏ.
-        """
-        if not parts:
-            return "Xin lỗi, hiện tôi chưa có thông tin phù hợp."
-
-
-        # --- Dedupe & phân loại ---
-        texts, dicts = [], []
-        for p in parts:
-            if isinstance(p, str):
-                if p not in texts:
-                    texts.append(p.strip())
-            elif isinstance(p, dict):
-                if p not in dicts:
-                    dicts.append(p)
-            else:
-                s = str(p).strip()
-                if s and s not in texts:
-                    texts.append(s)
-
-
-        # Nếu có JSON (dict), hợp nhất lại
-        merged_data = {}
-        if dicts:
-            # chỉ lấy dict cuối cùng hoặc merge keys
-            for d in dicts:
-                for k, v in d.items():
-                    merged_data[k] = v
-
-
-        raw_text = "\n\n".join(texts)
-
-
-        # --- Phát hiện loại agent ---
-        agent_type = "general"
-
-        if (
-            ("diseases" in merged_data or "explanation" in merged_data)
-            and ("cost" in merged_data or any("chi phí" in t.lower() or "giá" in t.lower() for t in texts))
-        ):
-            agent_type = "symptom_cost"
-        elif "diseases" in merged_data or "explanation" in merged_data:
-            agent_type = "symptom"
-        elif "cost" in merged_data or any("giá" in t.lower() or "chi phí" in t.lower() for t in texts):
-            agent_type = "cost"
-        elif "booking" in merged_data or any("đặt lịch" in t.lower() for t in texts):
-            agent_type = "booking"
-
-
-        # --- Nếu không có LLM, trả về raw ---
-        model_name = os.getenv("GOOGLE_GENAI_MODEL")
-        if not model_name:
-            logger.warning("[HostAgent._format_response] GOOGLE_GENAI_MODEL not set, skip LLM rewrite.")
-            return raw_text if raw_text else json.dumps(merged_data, ensure_ascii=False, indent=2)
-
-
-        try:
-            llm = ChatGoogleGenerativeAI(model=model_name, temperature=0.3)
-
-            if agent_type in ("symptom", "cost", "symptom_cost", "booking", "general"):
-                system_prompt = """
-                Bạn là trợ lý y tế thông minh, có khả năng tổng hợp thông tin từ nhiều nguồn (triệu chứng, bệnh, chi phí khám).
-                Nhiệm vụ của bạn là viết lại câu trả lời ngắn gọn, tự nhiên, dễ hiểu, KHÔNG XUỐNG DÒNG, KHÔNG DÙNG MARKDOWN.
-
-                Hãy dựa trên dữ liệu đầu vào để quyết định cách trả lời:
-
-                - Nếu dữ liệu chỉ có TRIỆU CHỨNG hoặc BỆNH:
-                Viết một câu mô tả nhận định tình trạng của người bệnh, liệt kê các bệnh có thể mắc phải, 
-                và thêm giải thích ngắn gọn vì sao có thể mắc các bệnh đó.
-                ⚙️ Ví dụ:
-                "Bạn có thể đang gặp các vấn đề về tiêu hóa như viêm dạ dày hoặc hội chứng ruột kích thích, 
-                do các triệu chứng đau bụng, đầy hơi và buồn nôn mà bạn mô tả."
-
-                - Nếu dữ liệu chỉ có CHI PHÍ:
-                Nếu có giá cụ thể → dùng trực tiếp.
-                Nếu không có hoặc trống → bạn **bắt buộc sinh giá ước lượng hợp lý** dựa trên loại bệnh hoặc chuyên khoa trước hết là tham khảo trong file goi_kham_vip_full.json, 
-                với mức dao động như sau:
-                    GÓI KHÁM TỔNG QUÁT CƠ BẢN : 4.000.000 Đồng
-                    GÓI KHÁM TỔNG QUÁT NÂNG CAO: 7.000.000đ (Nam)
-                    GÓI KHÁM TỔNG QUÁT CAO CẤP: 17.000.000đ
-                    GÓI KHÁM TẦM SOÁT NGUY CƠ ĐỘT QUỴ : 6.000.000 Đồng
-                    GÓI KHÁM TẦM SOÁT TIM MẠCH: 6.000.000 Đồng
-                    GÓI KHÁM TẦM SOÁT UNG THƯ:  9.500.000đ (Nam) và 9.800.000đ  (Nữ)   
-                    GÓI KHÁM TẦM SOÁT THẬN NIỆU NAM KHOA: 2.500.000 Đồng
-                    GÓI KHÁM TẦM SOÁT VIÊM GAN : 3.500.000 Đồng
-                    GÓI KHÁM TẦM SOÁT GAN NHIỄM MỠ : 3.500.000 Đồng
-                    GÓI KHÁM TẦM SOÁT BỆNH LÝ ỐNG TIÊU HÓA KHÔNG CAN THIỆP : 2.500.000 Đồng
-                    GÓI KHÁM TẦM SOÁT BỆNH LÝ ỐNG TIÊU HÓA CÓ CAN THIỆP: 3.500.000 Đồng
-                    GÓI KHÁM TẦM SOÁT CƠ XƯƠNG KHỚP : 2.500.000 Đồng
-                    GÓI KHÁM TẦM SOÁT UNG THƯ: 14.500.000đ  (Nội soi dạ dày-đại tràng gây mê)   
-                    GÓI KHÁM THẦN KINH: Chụp cộng hưởng từ (MRI): Khoảng 2.000.000 – 3.500.000 VNĐ/vị trí tùy loại có thuốc hay không thuốc phản ứng từ. 
-                    GÓI KHÁM SIÊU ÂM TIM	1.500.000đ
-                    
-
-                ⚙️ Ví dụ:
-                "Chi phí khám tiêu hóa tại bệnh viện trung bình từ 1.200.000 đến 1.800.000 đồng, bao gồm nội soi và xét nghiệm HP."
-                Hoặc nếu thiếu giá:
-                "Hiện chưa có giá chính xác, nhưng chi phí khám tiêu hóa thường dao động từ 800.000 đến 1.500.000 đồng tùy loại gói và cơ sở."
-
-                - Nếu dữ liệu có cả TRIỆU CHỨNG và CHI PHÍ:
-                Viết một câu liền mạch kết hợp cả hai nội dung: 
-                bắt đầu bằng nhận định bệnh, tiếp theo là chi phí khám hoặc xét nghiệm tương ứng (nếu rỗng thì sinh giá ước lượng theo khung trên),
-                cuối cùng thêm lời khuyên ngắn gọn.
-                ⚙️ Ví dụ:
-                "Bạn có thể đang bị viêm dạ dày với các triệu chứng đau vùng thượng vị, buồn nôn và khó tiêu. 
-                Gói khám tiêu hóa có chi phí khoảng 1.200.000 đồng, bao gồm nội soi và xét nghiệm HP. 
-                Nên đi khám sớm để xác định chính xác nguyên nhân và điều trị kịp thời."
-                Hoặc nếu không có giá:
-                "Bạn có thể đang bị viêm dạ dày với các triệu chứng đau vùng thượng vị, buồn nôn và khó tiêu. 
-                Chi phí khám tiêu hóa thường dao động khoảng 800.000 – 1.500.000 đồng tùy cơ sở. 
-                Nên đi khám sớm để xác định chính xác nguyên nhân."
-
-                ⚠️ Yêu cầu:
-                - Viết lại toàn bộ thành một đoạn văn duy nhất.
-                - Không dùng ký hiệu emoji, không xuống dòng, không có đánh số.
-                - Ưu tiên tính tự nhiên, dễ đọc.
-                - Không lặp ý.
-                - Trả về tiếng Việt chuẩn.
-                """
-
-
-
-
-            messages = [
-                SystemMessage(content=system_prompt),
-                HumanMessage(
-                    content=f"""
-                        Dữ liệu đầu vào (có thể lặp, gồm text + JSON, từ SymptomAgent, CostAgent, BookingAgent):
-                            {raw_text}\n\n{json.dumps(merged_data, ensure_ascii=False, indent=2) if merged_data else ''}
-                        Hãy viết lại câu trả lời hoàn chỉnh theo đúng cấu trúc Markdown đã quy định.
-                    """
-                    )
-            ]
-
-
-            if hasattr(llm, "invoke"):
-                resp = llm.invoke(messages)
-            else:
-                resp = llm(messages)
-
-            out = getattr(resp, "content", None) or str(resp)
-            # sanitize markdown to avoid code fences / inline bullets
-            try:
-                out = self._clean_markdown(out)
-            except Exception:
-                logger.exception("[HostAgent._format_response] _clean_markdown failed")
-            return out
-
-
-        except Exception as e:
-            logger.error(f"[HostAgent._format_response] Gemini call error: {e}")
-            return raw_text if raw_text else json.dumps(merged_data, ensure_ascii=False, indent=2)
-    
-    def _clean_markdown(self, text: str) -> str:
-        """
-        Sanitise LLM's markdown-like output:
-        - remove code fences (```...``` or ```lang)
-        - unescape HTML entities
-        - ensure headings/emojis appear on their own lines
-        - convert inline '*' bullets to proper lines
-        - collapse excessive blank lines
-        """
-        if not text:
-            return text
-
-        # 1) Remove code fences (``` or ```lang)
-        text = re.sub(r'```(?:\w+)?\n', '', text)
-        text = text.replace('```', '')
-
-        # 2) Unescape HTML entities (e.g. &lt;, &gt;, &amp;)
-        text = html.unescape(text)
-
-        # 3) Ensure emoji headings and common markers start on new paragraphs
-        # insert two newlines before these emojis if they are inline
-        text = re.sub(r'(?<!\n)(\s*)(🔎|🩺|💡|💰|📋|📅|⚠️)\s*', r'\n\n\2 ', text)
-
-        # 4) Convert inline " * item" to proper bullet lines
-        # Change occurrences like " * X * Y" or " * X" into "\n- X"
-        text = re.sub(r'\s+\*\s+', '\n- ', text)
-
-        # 5) If headings use " - " after them inline, break line before the dash
-        text = re.sub(r'(\*\*[\w\W]{1,80}?\*\*)(?:\s*-\s*)', r'\1\n- ', text)
-
-        # 6) Normalize multiple blank lines to max two
-        text = re.sub(r'\n{3,}', '\n\n', text)
-
-        # 7) Trim whitespace at ends
-        return text.strip()
-
     async def send_message(
         self, agent_name: str, message: str, tool_context: ToolContext
     ):
         """Sends a message to a remote agent and returns a normalized response.
 
-        Important fix: DO NOT reuse a task_id that belongs to another agent. We compute
-        the outgoing_task_id based on the *previous* agent recorded in the session state.
+        Returns:
+          - If remote agent returns a Message or Parts -> returns list of strings / dicts
+          - If it returns a Task (async), waits for final status and extracts parts/artifacts.
         """
         logger.info(f"[HostAgent.send_message] Sending to agent: {agent_name}")
         logger.debug(f"[HostAgent.send_message] message preview: {message[:400]}")
@@ -467,275 +171,149 @@ class HostAgent:
             raise ValueError(f'Agent {agent_name} not found')
 
         state = tool_context.state
-
-        # IMPORTANT: compute previous agent BEFORE we overwrite it below.
-        previous_agent = state.get('agent')
-        # Only forward the stored task_id if it belongs to the same agent we are about to call.
-        outgoing_task_id = state.get('task_id') if previous_agent == agent_name else None
-
-        # Now set the active agent in state (this records the intent to talk to this remote)
         state['agent'] = agent_name
-
         client = self.remote_agent_connections[agent_name]
         if not client:
             logger.error(f"[HostAgent.send_message] Client not available for {agent_name}")
             raise ValueError(f'Client not available for {agent_name}')
 
-        # Keep context id (session-global) if present
+        taskId = state.get('task_id', None)
         contextId = state.get('context_id', None)
-
         messageId = state.get('message_id', None)
         if not messageId:
             messageId = str(uuid.uuid4())
 
-        # Build MessageSendParams: pass outgoing_task_id (may be None) so we do NOT accidentally
-        # instruct other agents to look up a task_id that doesn't belong to them.
         request: MessageSendParams = MessageSendParams(
+            id=str(uuid.uuid4()),
             message=Message(
                 role='user',
                 parts=[TextPart(text=message)],
                 messageId=messageId,
                 contextId=contextId,
-                taskId=outgoing_task_id,
+                taskId=taskId,
             ),
             configuration=MessageSendConfiguration(
                 acceptedOutputModes=['text', 'text/plain', 'image/png'],
             ),
         )
 
+        logger.info(f"[HostAgent.send_message] Sending request id={request.id} to {agent_name}")
+        logger.debug(f"[HostAgent.send_message] Request preview: {str(request)[:800]}")
 
-        logger.info(f"[HostAgent.send_message] Sending request messageId={messageId} to {agent_name}")
-        logger.debug(f"[HostAgent.send_message] Request preview: {request}")
-
-        # Send and collect response
         response = await client.send_message(request, self.task_callback)
 
         logger.info(f"[HostAgent.send_message] Received response type: {type(response)} from {agent_name}")
         try:
             logger.debug(f"[HostAgent.send_message] Response (truncated): {str(response)[:2000]}")
         except Exception:
+            # some response objects may not stringify nicely
             logger.debug("[HostAgent.send_message] Response could not be stringified for debug")
 
-        # If remote returned a final Message
+        # If remote returns immediate Message -> convert parts and return
         if isinstance(response, Message):
             converted = await convert_parts(response.parts, tool_context)
             logger.debug(f"[HostAgent.send_message] Converted message parts: {converted}")
             return converted
 
-        if isinstance(response, (list, str, dict)):
-            logger.debug("[HostAgent.send_message] Remote returned immediate list/str/dict - returning as-is")
-            return response
-
-        if response is None:
-            logger.error("[HostAgent.send_message] Received None response from remote agent - did not collect streaming events")
-            raise ValueError("No response from remote agent; ensure HostAgent has a task_callback that accumulates streaming events.")
-
-        if not hasattr(response, "status"):
-            logger.error(f"[HostAgent.send_message] Unexpected response object without 'status': {type(response)}")
-            raise ValueError(f"Unexpected response type from agent {agent_name}: {type(response)}")
-
-        task = response  # type: ignore
-
-        # Update session state safely. Note: task.id belongs to the remote agent we just called.
+        # Otherwise response is Task: update session state and collect final outputs
+        task: Task = response
         state['session_active'] = task.status.state not in [
             TaskState.completed,
             TaskState.canceled,
             TaskState.failed,
             TaskState.unknown,
         ]
-        if getattr(task, "contextId", None):
+        if task.contextId:
             state['context_id'] = task.contextId
-        # store the task id returned by the agent we just called
-        state['task_id'] = getattr(task, "id", None)
+        state['task_id'] = task.id
 
         if task.status.state == TaskState.input_required:
             tool_context.actions.skip_summarization = True
             tool_context.actions.escalate = True
         elif task.status.state == TaskState.canceled:
-            logger.error(f"[HostAgent.send_message] Agent {agent_name} task {getattr(task, 'id', None)} is cancelled")
-            raise ValueError(f'Agent {agent_name} task {getattr(task, 'id', None)} is cancelled')
+            logger.error(f"[HostAgent.send_message] Agent {agent_name} task {task.id} is cancelled")
+            raise ValueError(f'Agent {agent_name} task {task.id} is cancelled')
         elif task.status.state == TaskState.failed:
-            logger.error(f"[HostAgent.send_message] Agent {agent_name} task {getattr(task, 'id', None)} failed")
-            raise ValueError(f'Agent {agent_name} task {getattr(task, 'id', None)} failed')
+            logger.error(f"[HostAgent.send_message] Agent {agent_name} task {task.id} failed")
+            raise ValueError(f'Agent {agent_name} task {task.id} failed')
 
         response_parts: List[Any] = []
-        if getattr(task.status, "message", None):
+        if task.status.message:
             response_parts.extend(
                 await convert_parts(task.status.message.parts, tool_context)
             )
-        if getattr(task, "artifacts", None):
+        if task.artifacts:
             for artifact in task.artifacts:
                 response_parts.extend(
                     await convert_parts(artifact.parts, tool_context)
                 )
         logger.debug(f"[HostAgent.send_message] Final response_parts: {response_parts}")
-        final_text = self._format_response(response_parts)
-        return final_text
+        return response_parts
 
 
-    def _default_task_callback(self, event, card: AgentCard):
-        """
-        Accumulate streaming events into a Task-like object.
-        """
-        if isinstance(event, Task) or isinstance(event, Message):
-            return event
-
-        # task id extraction (defensive)
-        task_id = None
-        if hasattr(event, "taskId"):
-            task_id = getattr(event, "taskId")
-        elif hasattr(event, "task_id"):
-            task_id = getattr(event, "task_id")
-        elif hasattr(event, "id"):
-            task_id = getattr(event, "id")
-        elif isinstance(event, dict):
-            task_id = event.get("taskId") or event.get("task_id") or event.get("id")
-
-        if not task_id:
-            task_id = str(uuid.uuid4())
-
-        t = self._tasks.get(task_id)
-        if not t:
-            t = SimpleNamespace(
-                id=task_id,
-                contextId=None,
-                artifacts=[],
-                status=SimpleNamespace(state=TaskState.working, message=None),
-            )
-            self._tasks[task_id] = t
-
-        # update contextId
-        if hasattr(event, "contextId"):
-            t.contextId = getattr(event, "contextId")
-        elif isinstance(event, dict) and "contextId" in event:
-            t.contextId = event.get("contextId")
-
-        # update status
-        status = None
-        if hasattr(event, "status"):
-            status = getattr(event, "status")
-        elif isinstance(event, dict) and "status" in event:
-            status = event.get("status")
-
-        if status:
-            if hasattr(status, "state"):
-                t.status.state = getattr(status, "state")
-            elif isinstance(status, dict) and "state" in status:
-                t.status.state = status.get("state", t.status.state)
-
-            message = getattr(status, "message", None) if hasattr(status, "message") else (status.get("message") if isinstance(status, dict) else None)
-            if message:
-                t.status.message = message
-
-        # artifact
-        artifact = None
-        if hasattr(event, "artifact"):
-            artifact = getattr(event, "artifact")
-        elif isinstance(event, dict) and "artifact" in event:
-            artifact = event.get("artifact")
-
-        if artifact:
-            # NOTE: we keep appending; duplication might occur upstream. We can dedupe later.
-            t.artifacts.append(artifact)
-
-        return t
-
-
-    def _flatten_orchestrate_result(self, resp) -> list:
-        """
-        Convert orchestrate_care_flow result -> flat list of parts (strings/dicts)
-        Keeps order: symptom -> cost -> booking
-        """
-        parts = []
-        if resp is None:
-            return parts
-        if isinstance(resp, dict):
-            for key in ("symptom", "cost", "booking"):
-                if key in resp:
-                    val = resp[key]
-                    if isinstance(val, list):
-                        for item in val:
-                            parts.append(item)
-                    elif isinstance(val, str):
-                        parts.append(val)
-                    elif isinstance(val, dict):
-                        parts.append(val)
-                    else:
-                        parts.append(str(val))
-        elif isinstance(resp, list):
-            parts = resp
-        elif isinstance(resp, str):
-            parts = [resp]
-        else:
-            parts = [str(resp)]
-        return parts
-
-
+    import logging
+    logger = logging.getLogger("HostAgent")
 
     async def orchestrate_care_flow(
-        self, message: str, tool_context: ToolContext, wants_symptom: bool = True, wants_cost: bool = True, wants_booking: bool = False
+        self, message: str, tool_context: ToolContext
     ):
         """
-        Orchestrate the triage & booking flow with explicit flags.
-
+        Orchestrate the triage & booking flow:
+        1) Send symptom text to SymptomAgent -> get diagnosis + tests
+        2) Summarize and send to CostAgent -> get packages & prices
+        3) If user intent contains booking keywords, call BookingAgent
         Returns a dict with keys: symptom, cost, booking (if executed).
         """
         results: Dict[str, Any] = {}
 
-        summary_for_cost = ""
-
-        # Step 1: SymptomAgent (only if requested)
-        if wants_symptom and "Symptom Agent" in self.remote_agent_connections:
+        # Step 1: SymptomAgent
+        if "SymptomAgent" in self.remote_agent_connections:
             try:
-                logger.info("=== Gọi Symptom Agent ===")
-                symptom_resp = await self.send_message("Symptom Agent", message, tool_context)
-                logger.info(f"[Symptom Agent] Kết quả: {symptom_resp}")
+                logger.info("=== Gọi SymptomAgent ===")
+                symptom_resp = await self.send_message(
+                    "SymptomAgent", message, tool_context
+                )
+                logger.info(f"[SymptomAgent] Kết quả: {symptom_resp}")
             except Exception as e:
-                symptom_resp = [f"Error calling Symptom Agent: {e}"]
+                symptom_resp = [f"Error calling SymptomAgent: {e}"]
                 logger.error(symptom_resp)
-        elif wants_symptom:
-            symptom_resp = ["Symptom Agent not available"]
-            logger.warning("Symptom Agent not available")
         else:
-            symptom_resp = ["Not requested"]
-
+            symptom_resp = ["SymptomAgent not available"]
+            logger.warning("SymptomAgent not available")
         results["symptom"] = symptom_resp
 
-        # Prepare summary if Symptom Agent ran
-        if wants_symptom:
-            summary_for_cost = self._summarize_symptom_result(symptom_resp)
+        # Build a concise summary for cost agent
+        summary_for_cost = self._summarize_symptom_result(symptom_resp)
 
-        # Step 2: CostAgent (only if requested)
-        if wants_cost and "Cost Agent" in self.remote_agent_connections:
+        # Step 2: CostAgent
+        cost_trigger_keywords = ["giá", "chi phí", "bao nhiêu", "gói khám"]
+        wants_cost = any(kw in message.lower() for kw in cost_trigger_keywords)
+
+        if "CostAgent" in self.remote_agent_connections and (summary_for_cost or wants_cost):
             try:
                 logger.info("=== Gọi CostAgent ===")
-                # If we have a good summary, use it; else use the raw user message as prompt
                 cost_prompt = (
-                    f"Tóm tắt từ Symptom Agent: {summary_for_cost}\n\n"
+                    f"Tóm tắt từ SymptomAgent: {summary_for_cost}\n\n"
                     f"User hỏi: {message}\n\n"
                     "Hãy đề xuất các gói khám, xét nghiệm, và chi phí tương ứng."
                 )
-                cost_resp = await self.send_message("Cost Agent", cost_prompt if summary_for_cost else message, tool_context)
-                logger.info(f"[Cost Agent] Kết quả: {cost_resp}")
+                cost_resp = await self.send_message("CostAgent", cost_prompt, tool_context)
+                logger.info(f"[CostAgent] Kết quả: {cost_resp}")
             except Exception as e:
-                cost_resp = [f"Error calling Cost Agent: {e}"]
+                cost_resp = [f"Error calling CostAgent: {e}"]
                 logger.error(cost_resp)
-        elif wants_cost:
-            cost_resp = ["Cost Agent not available"]
-            logger.warning("Cost Agent not available")
         else:
-            cost_resp = ["Not requested"]
-
+            cost_resp = ["CostAgent not available or no summary"]
+            logger.warning("CostAgent not available or no summary")
         results["cost"] = cost_resp
 
+        # Step 3: BookingAgent
+        booking_trigger_keywords = [
+            "đặt lịch", "hẹn khám", "booking", "đặt khám", "muốn đặt", "muốn hẹn",
+        ]
+        wants_booking = any(kw in message.lower() for kw in booking_trigger_keywords)
 
-        # Step 3: BookingAgent (unchanged logic)
-        if wants_booking:
-            wants_booking_flag = any(kw in message.lower() for kw in self._booking_keywords)
-        else:
-            wants_booking_flag = False
-
-        if wants_booking_flag and "BookingAgent" in self.remote_agent_connections:
+        if wants_booking and "BookingAgent" in self.remote_agent_connections:
             try:
                 logger.info("=== Gọi BookingAgent ===")
                 booking_prompt = (
@@ -754,33 +332,17 @@ class HostAgent:
             results["booking"] = ["Not requested or BookingAgent not available"]
             logger.info("Không gọi BookingAgent")
 
-        # -------------------------
-        # Produce the user-facing final_text (merge + optional LLM rewrite)
-        # -------------------------
-        # Flatten parts in deterministic order
-        all_parts = self._flatten_orchestrate_result(results)
-        logger.debug(f"[HostAgent.orchestrate_care_flow] all_parts before formatting: {all_parts}")
-
-        # Format final text using _format_response (this will call LLM if configured)
-        try:
-            final_text = self._format_response(all_parts)
-        except Exception:
-            logger.exception("[HostAgent.orchestrate_care_flow] _format_response error, falling back to join")
-            try:
-                final_text = "\n\n".join(map(str, all_parts))
-            except Exception:
-                final_text = str(results)
-
-        # Return both the raw result and the formatted text (backward-compatible)
-        return {"raw": results, "final_text": final_text}
+        return results
 
     def _summarize_symptom_result(self, symptom_resp: Any) -> str:
         """Create a compact single-line summary from the symptom agent response."""
+        # symptom_resp may be a list of strings/dicts or a single string.
         if symptom_resp is None:
             return ""
         if isinstance(symptom_resp, str):
             return symptom_resp.strip()
         if isinstance(symptom_resp, list):
+            # join a few items, truncate long outputs
             pieces = []
             for item in symptom_resp:
                 if isinstance(item, dict):
@@ -790,111 +352,11 @@ class HostAgent:
                 if len(pieces) >= 6:
                     break
             summary = " | ".join(pieces)
+            # truncate to reasonable length
             return summary[:150] + ("..." if len(summary) > 150 else "")
+        # fallback
         return str(symptom_resp)[:150]
 
-    def _to_user_text(self, resp):
-        """
-        Chuẩn hóa phản hồi của agent (list, dict, str, ...) thành 1 chuỗi văn bản user-facing.
-        Ưu tiên 'final_text' nếu có. Nếu không, flatten và format bằng LLM nếu cấu hình.
-        """
-        # 1️. Nếu dict có final_text thì trả thẳng
-        if isinstance(resp, dict) and "final_text" in resp:
-            return resp["final_text"]
-
-        # 2️. Flatten mọi trường hợp khác thành list phần tử
-        parts = self._flatten_orchestrate_result(resp)
-
-        # 3️. Nếu chỉ có 1 phần tử text, trả luôn
-        if len(parts) == 1 and isinstance(parts[0], str):
-            return parts[0]
-
-        # 4️. Thử format lại cho gọn (có thể gọi LLM nếu bạn bật)
-        try:
-            formatted = self._format_response(parts)
-            return formatted
-        except Exception:
-            logger.exception("[HostAgent._to_user_text] _format_response failed, fallback to join")
-            return "\n\n".join(map(str, parts))
-
-
-
-    # === Thêm method ainvoke để HostAgent dùng trực tiếp làm agent ===
-    async def ainvoke(self, message: str, session_id: str = None, **kwargs):
-        logger.info(f"[HostAgent.ainvoke] Processing message: {message[:200]}")
-
-        # Tạo session đầy đủ
-        session = Session(
-            id=session_id or "demo-session",
-            app_name="a2a-hospital-agents",
-            user_id="demo-user",
-            state={}
-        )
-
-        session_service = DummySessionService(session)
-
-        invocation_context = InvocationContext(
-            session_service=session_service,
-            invocation_id=new_invocation_context_id(),
-            agent=DummyAgent(),
-            session=session
-        )
-
-        tool_context = ToolContext(invocation_context)
-
-        # --- intent classification (base) ---
-        msg_lower = (message or "").lower()
-        wants_symptom = any(kw in msg_lower for kw in self._symptom_keywords)
-        wants_cost = any(kw in msg_lower for kw in self._cost_keywords)
-        wants_booking = any(kw in msg_lower for kw in self._booking_keywords)
-
-        # --- heuristics to resolve ambiguous queries where both symptom+cost keywords appear ---
-        # If the user's wording clearly requests packages/prices ("gói khám", "cho tôi các gói", "chi phí", "bao nhiêu"),
-        # prefer routing to Cost Agent alone unless the user explicitly asks about symptoms ("triệu chứng", "triệu chứng gì", "dấu hiệu").
-        cost_priority_phrases = [
-            "gói khám", "các gói khám", "chi phí", "giá", "bao nhiêu", "tốn", "chi phí khám",
-            "cho tôi các gói", "cho tôi gói", "xin cho biết", "cho biết", "tư vấn gói", "gợi ý gói",
-        ]
-        symptom_question_phrases = [
-            "triệu chứng gì", "triệu chứng", "dấu hiệu", "bị ", "bị", "nôn", "đau", "sốt", "chảy máu",
-            "phân đen", "nôn ra máu", "nội soi", "bệnh gì",
-        ]
-
-        cost_cue = any(p in msg_lower for p in cost_priority_phrases)
-        symptom_cue = any(p in msg_lower for p in symptom_question_phrases)
-
-        # Resolve precedence:
-        # - If cost cue is present and no explicit symptom question cue -> treat as cost-only.
-        # - If symptom cue is present and no cost cue -> treat as symptom-only.
-        # - Otherwise (both present or neither) keep both flags as-is and orchestrate both (fallback to symptom first).
-        if wants_cost and cost_cue and not symptom_cue:
-            wants_symptom = False
-            wants_cost = True
-        elif wants_symptom and symptom_cue and not cost_cue:
-            wants_cost = False
-
-        logger.debug(f"[HostAgent.ainvoke] intent wants_symptom={wants_symptom}, wants_cost={wants_cost}, wants_booking={wants_booking} (after heuristics cost_cue={cost_cue}, symptom_cue={symptom_cue})")
-
-        # Route according to explicit intent rules required by user:
-        # - symptom-only -> Symptom Agent
-        # - cost-only -> Cost Agent
-        # - both -> Symptom Agent then Cost Agent (use orchestrate_care_flow)
-        if wants_symptom and wants_cost:
-            raw_result = await self.orchestrate_care_flow(message, tool_context, wants_symptom=True, wants_cost=True, wants_booking=wants_booking)
-            return self._to_user_text(raw_result)
-
-        elif wants_symptom and not wants_cost:
-            resp = await self.send_message("Symptom Agent", message, tool_context)
-            return self._to_user_text(resp)
-
-        elif wants_cost and not wants_symptom:
-            resp = await self.send_message("Cost Agent", message, tool_context)
-            return self._to_user_text(resp)
-
-        else:
-            logger.debug("[HostAgent.ainvoke] fallback: routing to Symptom Agent")
-            resp = await self.send_message("Symptom Agent", message, tool_context)
-            return self._to_user_text(resp)
 
 
 async def convert_parts(parts: list[Part], tool_context: ToolContext):
@@ -905,9 +367,12 @@ async def convert_parts(parts: list[Part], tool_context: ToolContext):
 
 
 async def convert_part(part: Part, tool_context: ToolContext):
+    # Note: part.root.kind is expected to be 'text' | 'data' | 'file'
+    # We keep the logic defensive in case of unexpected shapes.
     try:
         root = part.root
     except Exception:
+        # fallback printing entire part
         return str(part)
 
     kind = getattr(root, "kind", None)
@@ -916,49 +381,34 @@ async def convert_part(part: Part, tool_context: ToolContext):
     if kind == 'data':
         return getattr(root, "data", {})
     if kind == 'file':
+        # Repackage A2A FilePart to google.genai Blob
         file_id = getattr(root.file, "name", str(uuid.uuid4()))
         file_bytes_b64 = getattr(root.file, "bytes", None)
-        mime = getattr(root.file, "mimeType", "application/octet-stream")
-
         if file_bytes_b64:
-            try:
-                file_bytes = base64.b64decode(file_bytes_b64)
-            except Exception:
-                file_bytes = None
-
-            if file_bytes is not None:
-                file_part = types.Part(
-                    inline_data=types.Blob(
-                        mime_type=mime,
-                        data=file_bytes,
-                    )
+            file_bytes = base64.b64decode(file_bytes_b64)
+            file_part = types.Part(
+                inline_data=types.Blob(
+                    mime_type=getattr(root.file, "mimeType", "application/octet-stream"),
+                    data=file_bytes,
                 )
-                await tool_context.save_artifact(file_id, file_part)
-                tool_context.actions.skip_summarization = True
-                tool_context.actions.escalate = True
-
-                # If text-like, decode and include text for LLM consumption
-                if mime.startswith("text/") or "json" in mime or "xml" in mime or mime in (
-                    "application/json", "application/xml", "application/javascript", "application/ld+json"
-                ):
-                    try:
-                        text = file_bytes.decode("utf-8")
-                        if len(text) > 20000:
-                            text = text[:20000] + "\n\n...[truncated]"
-                        return {"file_text": text, "artifact-file-id": file_id, "mime": mime}
-                    except Exception:
-                        return {"artifact-file-id": file_id, "mime": mime}
-                # Non-text file -> return dict marker
-                return {"artifact-file-id": file_id, "mime": mime}
-            else:
-                return {"artifact-file-id": file_id, "mime": mime, "note": "decode_failed"}
+            )
+            await tool_context.save_artifact(file_id, file_part)
+            tool_context.actions.skip_summarization = True
+            tool_context.actions.escalate = True
+            return DataPart(data={'artifact-file-id': file_id})
         else:
-            return {"file": "empty"}
+            return {'file': 'empty'}
     return f'Unknown type: {getattr(part, "kind", str(part))}'
 
+# ===== Helper khởi tạo đồng bộ =====
 
-# ===== Helper khởi tạo đồng bộ =====n
+import httpx
+
 def get_initialized_routing_agent_sync(remote_agent_addresses: list[str]):
+    """
+    Hàm helper để khởi tạo HostAgent đồng bộ, đảm bảo load xong danh thiếp từ các remote agents
+    trước khi trả về Agent (tránh race condition).
+    """
     import asyncio
 
     async def _init():
@@ -966,12 +416,7 @@ def get_initialized_routing_agent_sync(remote_agent_addresses: list[str]):
         host = HostAgent(remote_agent_addresses, client)
         # Đợi load xong danh thiếp từ các remote agent
         await host.init_remote_agent_addresses(remote_agent_addresses)
-        print(">>> DEBUG: returning HostAgent, not LlmAgent", type(host))
-        return host
+        return host.create_agent()
 
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    agent = loop.run_until_complete(_init())
-    # KHÔNG close loop, để agent còn xài httpx.AsyncClient
-    return agent
-
+    # Chạy async trong vòng lặp hiện tại (blocking)
+    return asyncio.get_event_loop().run_until_complete(_init())
