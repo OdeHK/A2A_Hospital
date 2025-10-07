@@ -742,18 +742,18 @@ Hãy viết lại câu trả lời hoàn chỉnh theo đúng cấu trúc Markdow
         Chuẩn hóa phản hồi của agent (list, dict, str, ...) thành 1 chuỗi văn bản user-facing.
         Ưu tiên 'final_text' nếu có. Nếu không, flatten và format bằng LLM nếu cấu hình.
         """
-        # 1️⃣ Nếu dict có final_text thì trả thẳng
+        # 1. Nếu dict có final_text thì trả thẳng
         if isinstance(resp, dict) and "final_text" in resp:
             return resp["final_text"]
 
-        # 2️⃣ Flatten mọi trường hợp khác thành list phần tử
+        # 2️. Flatten mọi trường hợp khác thành list phần tử
         parts = self._flatten_orchestrate_result(resp)
 
-        # 3️⃣ Nếu chỉ có 1 phần tử text, trả luôn
+        # 3️. Nếu chỉ có 1 phần tử text, trả luôn
         if len(parts) == 1 and isinstance(parts[0], str):
             return parts[0]
 
-        # 4️⃣ Thử format lại cho gọn (có thể gọi LLM nếu bạn bật)
+        # 4️. Thử format lại cho gọn (có thể gọi LLM nếu bạn bật)
         try:
             formatted = self._format_response(parts)
             return formatted
