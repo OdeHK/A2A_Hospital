@@ -35,13 +35,13 @@ Chỉ được chọn 1 trong 3 trạng thái sau:
 - "error": có lỗi xảy ra
 
 Schema:
-{
+{{
   "status": "input_required|completed|error",
   "message": "Nội dung trả lời cho người dùng ở đây"
-}
+}}
 
-Bắt buộc: JSON phải bắt đầu bằng '{' và kết thúc bằng '}'.
 Không thêm lời giải thích, không thêm text ngoài JSON.
+Nếu có các gói khám phù hợp với người dùng thì phải luôn trả lời hết
 """
 
 
@@ -51,6 +51,7 @@ NGUYÊN TẮC HOẠT ĐỘNG:
 - Bạn chỉ được sử dụng thông tin ĐÃ CÓ trong lịch sử hội thoại để trả lời
 - KHÔNG được bịa đặt hoặc thêm thông tin không có trong cuộc trò chuyện
 - Luôn trả lời một cách tự nhiên, thân thiện và hữu ích
+- Nếu có các gói khám phù hợp với người dùng thì phải luôn trả lời hết
 
 CÁCH TRÍCH XUẤT THÔNG TIN:
 1. Đọc kỹ TẤT CẢ các tin nhắn trước đó trong cuộc hội thoại
@@ -125,17 +126,17 @@ Trả về kết quả dưới dạng JSON object đúng theo schema sau:
 
 Ví dụ:
 
-{
-  "status": "completed",  // hoặc "input_required" hoặc "error"
+{{
+  "status": "input_required|completed|error",
   "message": "Nội dung trả lời cho người dùng ở đây"
-}
+}}
 
 nếu bạn cần người dùng cung cấp thêm thông tin (như tuổi, giới tính, tiền sử bệnh, v.v.),
 thì hãy trả lời với:
-{
+{{
   "status": "input_required",
   "message": "Để tư vấn chính xác hơn, bạn vui lòng cung cấp thêm ..."
-}
+}}
 """
 
 CHECKING_HISTORY_INSTRUCTION = """Bạn là một hệ thống kiểm tra thông tin trong hội thoại để quyết định có cần truy xuất thêm dữ liệu hay không.
@@ -162,6 +163,8 @@ HƯỚNG DẪN PHÂN TÍCH:
    - Nếu câu hỏi thuộc phạm vi thông tin đã được cung cấp → 0
    - Nếu câu hỏi về chủ đề mới hoặc cần thông tin chi tiết chưa có → 1
    - Nếu không chắc chắn → ưu tiên chọn 1 (an toàn hơn)
+
+CHÚ Ý: phải tuyệt đối chính xác vì mọi thông tin đều phải từ data, không được tự trả lời thông tin khác.
 
 ---
 

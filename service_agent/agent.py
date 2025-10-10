@@ -241,11 +241,12 @@ class ServiceAgent:
     
     def invoke(self, query, sessionId) -> str:
         config = {"configurable": {"thread_id": sessionId}}
-        self.graph.invoke({"messages": [("user", query)]}, config)        
+        inputs = {"messages": [HumanMessage(content=query)]}
+        self.graph.invoke(inputs, config)        
         return self.get_agent_response(config)
     
     async def stream(self, query, sessionId) -> AsyncIterable[Dict[str, Any]]:
-        inputs = {"messages": [("user", query)]}
+        inputs = {"messages": [HumanMessage(content=query)]}
         config = {"configurable": {"thread_id": sessionId}}
 
         for item in self.graph.stream(inputs, config, stream_mode="values"):
