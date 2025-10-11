@@ -8,7 +8,7 @@ from langchain_groq import ChatGroq
 from typing import Any, Dict, AsyncIterable, Literal
 
 from .utils import get_package_by_id, convert_packages_to_str, PACKAGES
-from .prompts_p import *
+from .prompts import *
 
 import os
 import re
@@ -114,7 +114,7 @@ def check_history(state: MessagesState):
     # Tạo structured output với schema rõ ràng hơn
     try:
         sys_msg = CHECKING_HISTORY_INSTRUCTION
-        structed_llm = llm_llama_8b.with_structured_output(HistoryStatus)
+        structed_llm = llm_qwen3_32b_wr.with_structured_output(HistoryStatus)
         
         # Thêm context về task hiện tại
         enhanced_messages = [SystemMessage(content=sys_msg)] + messages
@@ -185,7 +185,8 @@ def answer_with_retrival(state:MessagesState):
     # print('***'*30)
 
     sys_msg = ANSWER_WITH_SERVICE_INSTRUCTION.format(selected_packages=selected_packages)
-    llm_struct = llm_qwen3_32b_wr.with_structured_output(ResponseFormat,method="json_mode")
+
+    llm_struct = llm_qwen3_32b_wr.with_structured_output(ResponseFormat,method="json_schema")
     response = llm_struct.invoke([SystemMessage(content=sys_msg)] + state["messages"])
 
     # new_memory = state["messages"] + [response]  # state["messages"] lúc này chỉ là summary
@@ -196,7 +197,7 @@ def answer_with_retrival(state:MessagesState):
 
 def answer_without_retrival(state:MessagesState):
     sys_msg = ANSWER_WITHOUT_SERVICE_INSTRUCTION
-    llm_struct = llm_qwen3_32b_wr.with_structured_output(ResponseFormat,method="json_mode")
+    llm_struct = llm_qwen3_32b_wr.with_structured_output(ResponseFormat,method="json_schema")
     response = llm_struct.invoke([SystemMessage(content=sys_msg)] + state["messages"])
 
     # new_memory = state["messages"] + [response]  # state["messages"] lúc này chỉ là summary
@@ -320,5 +321,3 @@ if __name__ == "__main__":
         for chunk in graph.stream({"messages": input_mes}, config, stream_mode="values"):
 
             chunk["messages"][-1].pretty_print()
-            
-
