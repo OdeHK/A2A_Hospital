@@ -1,0 +1,1340 @@
+{
+    "packages": [
+        {
+            "id": 0,
+            "name": "Không liên quan hoặc không có gói khám phù hợp",
+            "description": "(id:0) Câu hỏi không liên quan đến dịch vụ y tế hoặc không có gói khám phù hợp trong danh sách.",
+            "price": 0
+        },
+        {
+            "id": 1,
+            "name": "GÓI KHÁM TỔNG QUÁT CƠ BẢN",
+            "description": "(id:1) Gói Khám Tổng Quát Cơ Bản (4.000.000 đồng) phù hợp cho người trưởng thành muốn kiểm tra sức khỏe định kỳ, đặc biệt những người ít đi khám, có lối sống ít vận động hoặc tiền sử gia đình mắc bệnh tim mạch, tiểu đường, rối loạn mỡ máu. Nếu bạn thường xuyên mệt mỏi, khó ngủ, tăng cân, đau tức ngực, hay tiểu đêm hoặc nghi ngờ rối loạn nội tiết, đây là gói khám cần thiết để phát hiện sớm và theo dõi các bệnh lý phổ biến",
+            "price": 4000000,
+            "services_ids": [
+                1,
+                7,
+                8,
+                9,
+                10,
+                11,
+                12,
+                13,
+                14,
+                15,
+                16,
+                17,
+                18,
+                19,
+                20,
+                21,
+                22,
+                23,
+                24,
+                25,
+                26,
+                27,
+                28,
+                29,
+                30,
+                31,
+                32
+            ],
+            "included_package_ids": []
+        },
+        {
+            "id": 2,
+            "name": "GÓI KHÁM TỔNG QUÁT NÂNG CAO CHO NAM",
+            "description": "(id:2) Gói Khám Tổng Quát Nâng Cao (Nam – 7.000.000 đồng) phù hợp cho nam giới trung niên hoặc có nguy cơ bệnh lý gan, tim mạch, ung thư (đặc biệt ung thư gan, tuyến tiền liệt, phổi). Những người có biểu hiện mệt mỏi kéo dài, sụt cân không rõ nguyên nhân, rối loạn tiểu tiện, đau tức vùng hạ sườn phải, vàng da hoặc nghi ngờ rối loạn mạch máu nên lựa chọn gói này để phát hiện sớm và theo dõi bệnh lý.",
+            "price": 7000000,
+            "services_ids": [
+                33,
+                34,
+                35,
+                36,
+                37,
+                38,
+                39,
+                40,
+                41,
+                44,
+                45,
+                46,
+                47,
+                48,
+                50,
+                51
+            ],
+            "included_package_ids": [
+                1
+            ]
+        },
+        {
+            "id": 3,
+            "name": "GÓI KHÁM TỔNG QUÁT NÂNG CAO CHO NỮ",
+            "description": "(id:3) Gói Khám Tổng Quát Nâng Cao (Nữ – 7.500.000 đồng) phù hợp cho nữ giới trưởng thành, nhất là phụ nữ sau 30 tuổi hoặc có yếu tố nguy cơ về ung thư vú, cổ tử cung, buồng trứng, gan. Nếu thường xuyên mệt mỏi, rối loạn kinh nguyệt, đau tức ngực, có khối bất thường ở vú, sút cân nhanh, hay khó tiêu kéo dài thì gói khám này giúp tầm soát và phát hiện sớm các bệnh lý nguy hiểm.",
+            "price": 7500000,
+            "services_ids": [
+                33,
+                34,
+                35,
+                36,
+                37,
+                38,
+                39,
+                40,
+                41,
+                42,
+                43,
+                44,
+                47,
+                48,
+                49,
+                50,
+                51
+            ],
+            "included_package_ids": [
+                1
+            ]
+        },
+        {
+            "id": 4,
+            "name": "GÓI KHÁM TỔNG QUÁT CAO CẤP CHO NAM",
+            "description": "(id:4) Gói Khám Tổng Quát Cao Cấp (17.000.000 đồng) bao gồm toàn bộ nội dung của gói cơ bản và nâng cao, kết hợp thêm chụp cắt lớp vi tính toàn thân, nội soi tiêu hóa trên và dưới có gây mê. Gói khám này phù hợp cho người có tiền sử gia đình mắc ung thư, bệnh lý tiêu hóa hoặc thường xuyên gặp triệu chứng đau bụng, đầy hơi, rối loạn tiêu hóa, khó nuốt, ho kéo dài, sụt cân không rõ nguyên nhân; giúp tầm soát toàn diện và phát hiện sớm nhiều bệnh lý nguy hiểm.",
+            "price": 17000000,
+            "services_ids": [
+                52,
+                53,
+                54
+            ],
+            "included_package_ids": [
+                1,
+                2
+            ]
+        },
+        {
+            "id": 5,
+            "name": "GÓI KHÁM TỔNG QUÁT CAO CẤP CHO NỮ",
+            "description": "(id:5) Gói Khám Tổng Quát Cao Cấp (17.000.000 đồng) bao gồm toàn bộ nội dung của gói cơ bản và nâng cao, kết hợp thêm chụp cắt lớp vi tính toàn thân, nội soi tiêu hóa trên và dưới có gây mê. Gói khám này phù hợp cho người có tiền sử gia đình mắc ung thư, bệnh lý tiêu hóa hoặc thường xuyên gặp triệu chứng đau bụng, đầy hơi, rối loạn tiêu hóa, khó nuốt, ho kéo dài, sụt cân không rõ nguyên nhân; giúp tầm soát toàn diện và phát hiện sớm nhiều bệnh lý nguy hiểm.",
+            "price": 17000000,
+            "services_ids": [
+                52,
+                53,
+                54
+            ],
+            "included_package_ids": [
+                1,
+                3
+            ]
+        },
+        {
+            "id": 6,
+            "name": "GÓI KHÁM TẦM SOÁT NGUY CƠ ĐỘT QUỴ",
+            "description": "(id:6) Gói Khám Tầm Soát Nguy Cơ Đột Quỵ (6.000.000 đồng) phù hợp cho người có tiền sử tăng huyết áp, tiểu đường, rối loạn mỡ máu, hút thuốc lá, béo phì hoặc gia đình từng có người bị đột quỵ. Nếu bạn thường xuyên đau đầu, chóng mặt, tê yếu tay chân, rối loạn giấc ngủ, tim đập nhanh hoặc có cơn thiếu máu não thoáng qua thì nên lựa chọn gói khám này để phát hiện sớm và phòng ngừa nguy cơ đột quỵ.",
+            "price": 6000000,
+            "services_ids": [
+                2,
+                3,
+                7,
+                8,
+                9,
+                10,
+                11,
+                12,
+                13,
+                14,
+                15,
+                16,
+                17,
+                18,
+                19,
+                20,
+                26,
+                27,
+                28,
+                29,
+                30,
+                47,
+                55
+            ],
+            "included_package_ids": []
+        },
+        {
+            "id": 7,
+            "name": "GÓI KHÁM TẦM SOÁT TIM MẠCH",
+            "description": "(id:7) Gói Khám Tầm Soát Tim Mạch (6.000.000 đồng) phù hợp cho người có nhu cầu khám về tim mạch. Những người có lối sống ít vận động, thừa cân, hút thuốc, uống rượu bia nhiều, người lớn tuổi hoặc có tiền sử gia đình mắc bệnh tim mạch. Nếu thường xuyên cảm thấy đau tức ngực, khó thở, hồi hộp, tim đập nhanh, phù chân, mệt mỏi khi vận động hoặc có rối loạn mỡ máu thì nên lựa chọn gói khám này để đánh giá toàn diện sức khỏe tim mạch và phát hiện sớm nguy cơ bệnh lý.",
+            "price": 6000000,
+            "services_ids": [
+                79,
+                7,
+                69,
+                8,
+                9,
+                10,
+                11,
+                12,
+                13,
+                14,
+                15,
+                16,
+                17,
+                18,
+                19,
+                20,
+                26,
+                27,
+                28,
+                29,
+                30,
+                47,
+                48,
+                56
+            ],
+            "included_package_ids": []
+        },
+        {
+            "id": 8,
+            "name": "GÓI KHÁM TẦM SOÁT UNG THƯ CHO NAM",
+            "description": "(id:8) Gói Khám Tầm Soát Ung Thư (Nam – 9.500.000 đồng) phù hợp cho nam giới có nhu cầu rà soát ung thư, thường xuyên hút thuốc, uống rượu bia, làm việc trong môi trường độc hại hoặc có tiền sử gia đình mắc ung thư. Những người có triệu chứng sụt cân nhanh, chán ăn, đau bụng kéo dài, rối loạn tiêu hóa, tiểu khó hoặc xuất hiện khối bất thường nên lựa chọn gói này để phát hiện sớm bệnh lý nguy hiểm",
+            "price": 9500000,
+            "services_ids": [
+                6,
+                7,
+                8,
+                9,
+                18,
+                19,
+                20,
+                15,
+                16,
+                17,
+                45,
+                46,
+                39,
+                40,
+                41,
+                44,
+                26,
+                27,
+                30,
+                31,
+                32,
+                57,
+                58,
+                80,
+                81
+            ],
+            "included_package_ids": []
+        },
+        {
+            "id": 9,
+            "name": "GÓI KHÁM TẦM SOÁT UNG THƯ CHO NỮ",
+            "description": "(id:9) Gói Khám Tầm Soát Ung Thư (Nữ – 9.800.000 đồng) phù hợp cho nữ giới có nhu cầu rà soát những bệnh lý ung thư vú, buồng trứng, cổ tử cung, gan, phổi, dạ dày và đại trực tràng. Nếu bạn có biểu hiện rối loạn kinh nguyệt, đau tức ngực, khối u bất thường ở vú, sút cân không rõ nguyên nhân, đầy hơi, chảy máu bất thường hoặc rối loạn tiêu hóa kéo dài thì gói khám này giúp tầm soát toàn diện và phát hiện sớm ung thư.",
+            "price": 9800000,
+            "services_ids": [
+                6,
+                7,
+                8,
+                9,
+                18,
+                19,
+                20,
+                15,
+                16,
+                17,
+                39,
+                40,
+                41,
+                42,
+                43,
+                44,
+                26,
+                27,
+                30,
+                31,
+                78,
+                32,
+                57,
+                58,
+                80,
+                81
+            ],
+            "included_package_ids": []
+        },
+        {
+            "id": 10,
+            "name": "GÓI KHÁM TẦM SOÁT THẬN NIỆU NAM KHOA",
+            "description": "(id:10) Gói Khám Tầm Soát Thận Niệu Nam Khoa (2.500.000 đồng) phù hợp cho nam giới có nguy cơ mắc các bệnh về thận, đường tiết niệu và sức khỏe sinh sản, đặc biệt những người thường xuyên uống ít nước, hút thuốc, uống rượu bia, làm việc căng thẳng hoặc có tiền sử gia đình về bệnh thận – tuyến tiền liệt. Nếu bạn gặp các triệu chứng tiểu khó, tiểu nhiều lần, đau tức vùng bụng dưới, đau tinh hoàn, giảm ham muốn hoặc rối loạn sinh lý thì nên lựa chọn gói khám này để phát hiện sớm và điều trị kịp thời.",
+            "price": 2500000,
+            "services_ids": [
+                4,
+                7,
+                8,
+                18,
+                19,
+                20,
+                45,
+                46,
+                60,
+                61,
+                62,
+                26,
+                30,
+                59
+            ],
+            "included_package_ids": []
+        },
+        {
+            "id": 11,
+            "name": "GÓI KHÁM TẦM SOÁT VIÊM GAN",
+            "description": "(id:11) Gói Khám Tầm Soát Viêm Gan (3.500.000 đồng) được thiết kế cho nam giới có nhu khám về gan. Những người có nguy cơ cao mắc các bệnh lý về gan do thói quen uống rượu bia, hút thuốc lá, chế độ ăn nhiều dầu mỡ hoặc làm việc căng thẳng kéo dài. Nếu xuất hiện các dấu hiệu như vàng da, mệt mỏi, chán ăn, đau tức hạ sườn phải hay men gan tăng, nam giới nên lựa chọn gói khám này để kịp thời phát hiện và phòng ngừa biến chứng. Đối với nữ giới, gói khám đặc biệt phù hợp cho những người thường xuyên dùng thuốc, có thói quen sinh hoạt thiếu điều độ, hoặc lo lắng về nguy cơ lây nhiễm viêm gan virus trong đời sống hàng ngày. Khi gặp tình trạng mệt mỏi kéo dài, buồn nôn, rối loạn tiêu hóa hay da sạm không rõ nguyên nhân, chị em nên ưu tiên thực hiện gói khám để bảo vệ chức năng gan và sức khỏe tổng thể.",
+            "price": 3500000,
+            "services_ids": [
+                6,
+                7,
+                8,
+                9,
+                15,
+                16,
+                17,
+                18,
+                19,
+                20,
+                21,
+                83,
+                33,
+                34,
+                35,
+                36,
+                37,
+                38,
+                30,
+                63
+            ],
+            "included_package_ids": []
+        },
+        {
+            "id": 12,
+            "name": "GÓI KHÁM TẦM SOÁT GAN NHIỄM MỠ",
+            "description": "(id:12) Gói Khám Tầm Soát Gan Nhiễm Mỡ (3.500.000 đồng) phù hợp cho những ai có lối sống ít vận động, thường xuyên sử dụng rượu bia, thức ăn nhanh, hoặc có cân nặng vượt mức. Khi xuất hiện các triệu chứng như mệt mỏi, đầy bụng, chán ăn, men gan cao hoặc cảm giác nặng tức vùng hạ sườn phải, việc thực hiện gói khám sẽ giúp phát hiện sớm tình trạng gan nhiễm mỡ và đưa ra biện pháp điều chỉnh kịp thời.",
+            "price": 3500000,
+            "services_ids": [
+                10,
+                11,
+                12,
+                13
+            ],
+            "included_package_ids": [
+                9
+            ]
+        },
+        {
+            "id": 13,
+            "name": "GÓI KHÁM TẦM SOÁT BỆNH LÝ ỐNG TIÊU HÓA KHÔNG CAN THIỆP",
+            "description": "(id:13) Gói Khám Tầm Soát Bệnh Lý Ống Tiêu Hóa Không Can Thiệp (2.500.000 đồng) phù hợp cho những người thường xuyên gặp tình trạng đầy hơi, khó tiêu, đau vùng thượng vị, ợ nóng, buồn nôn hoặc nghi ngờ nhiễm vi khuẩn HP. Gói khám giúp phát hiện sớm các bệnh lý liên quan đến dạ dày – ruột mà không cần can thiệp nội soi, đồng thời hỗ trợ kiểm tra chức năng tiêu hóa và đánh giá sức khỏe tổng quát của cơ quan bụng, từ đó mang lại giải pháp chăm sóc và điều trị hiệu quả hơn.",
+            "price": 2500000,
+            "services_ids": [
+                6,
+                7,
+                8,
+                19,
+                21,
+                83,
+                30,
+                64
+            ],
+            "included_package_ids": []
+        },
+        {
+            "id": 14,
+            "name": "GÓI KHÁM TẦM SOÁT BỆNH LÝ ỐNG TIÊU HÓA CÓ CAN THIỆP",
+            "description": "(id:14) Gói Khám Tầm Soát Bệnh Lý Ống Tiêu Hóa Có Can Thiệp (3.500.000 đồng) phù hợp cho những người thường xuyên gặp tình trạng đầy bụng, khó tiêu, đau vùng thượng vị, rối loạn tiêu hóa kéo dài, đi ngoài phân bất thường hoặc nghi ngờ bệnh lý dạ dày – đại tràng. Gói khám giúp phát hiện sớm và chính xác các bệnh lý tiêu hóa nhờ kết hợp xét nghiệm, siêu âm cùng nội soi dạ dày, đại tràng và clo test chẩn đoán H.Pylori. So với gói không can thiệp, gói này mang lại lợi ích vượt trội nhờ có nội soi trực tiếp, giúp quan sát tổn thương rõ ràng và đánh giá toàn diện đường tiêu hóa, từ đó hỗ trợ đưa ra hướng điều trị chính xác và kịp thời.",
+            "price": 3500000,
+            "services_ids": [
+                6,
+                7,
+                8,
+                19,
+                21,
+                83,
+                30,
+                65,
+                66
+            ],
+            "included_package_ids": []
+        },
+        {
+            "id": 15,
+            "name": "GÓI KHÁM TẦM SOÁT CƠ XƯƠNG KHỚP",
+            "description": "(id:15) Gói Khám Tầm Soát Cơ Xương Khớp (2.500.000 đồng) phù hợp cho những người thường xuyên bị đau nhức xương khớp, cứng khớp đặc biệt là những người lớn tuổi, tê bì tay chân, vận động khó khăn, hay có dấu hiệu sưng viêm tại các khớp. Gói khám giúp phát hiện sớm các bệnh lý xương khớp, thoái hóa, gout, viêm khớp và các rối loạn chuyển hóa liên quan. Với hệ thống xét nghiệm chuyên sâu, chẩn đoán hình ảnh (X-quang, siêu âm, điện tim) và khám chuyên khoa, gói khám mang lại lợi ích trong việc đánh giá toàn diện tình trạng cơ xương khớp, hỗ trợ chẩn đoán chính xác và đưa ra phác đồ điều trị kịp thời, từ đó cải thiện chất lượng cuộc sống và phòng ngừa biến chứng.",
+            "price": 2500000,
+            "services_ids": [
+                5,
+                7,
+                67,
+                8,
+                10,
+                11,
+                12,
+                13,
+                14,
+                15,
+                16,
+                17,
+                18,
+                19,
+                20,
+                68,
+                26,
+                70,
+                71,
+                28,
+                30
+            ],
+            "included_package_ids": []
+        },
+        {
+            "id": 16,
+            "name": "GÓI KHÁM TẦM SOÁT UNG THƯ (Nội soi dạ dày-đại tràng gây mê) CHO NAM",
+            "description": "(id:16) Gói Khám Tầm Soát Ung Thư (14.500.000 đồng – Nội soi dạ dày, đại tràng gây mê) dành cho nam giới là lựa chọn toàn diện giúp phát hiện sớm các bệnh ung thư thường gặp như gan, phổi, dạ dày, đại trực tràng, tuyến tiền liệt… Gói này phù hợp với những người thường xuyên hút thuốc, uống rượu bia, làm việc trong môi trường nhiều hóa chất độc hại hoặc có tiền sử gia đình mắc ung thư. Các triệu chứng như sút cân nhanh, chán ăn, rối loạn tiêu hóa, đau bụng kéo dài, tiểu khó hoặc tiểu ra máu là dấu hiệu cần ưu tiên khám. So với gói tầm soát ung thư cơ bản (Nam – 9.500.000 đồng), gói nâng cao này bổ sung nội soi dạ dày – đại tràng gây mê và chụp cắt lớp vi tính đa dãy, giúp tầm soát kỹ lưỡng hơn và tăng khả năng phát hiện tổn thương nhỏ ngay từ giai đoạn sớm.",
+            "price": 14500000,
+            "services_ids": [
+                6,
+                7,
+                8,
+                9,
+                18,
+                19,
+                20,
+                15,
+                16,
+                17,
+                45,
+                46,
+                39,
+                40,
+                41,
+                44,
+                26,
+                27,
+                30,
+                31,
+                32,
+                29,
+                28,
+                82,
+                84,
+                57,
+                58
+            ],
+            "included_package_ids": []
+        },
+        {
+            "id": 17,
+            "name": "GÓI KHÁM TẦM SOÁT UNG THƯ (Nội soi dạ dày-đại tràng gây mê) CHO NỮ",
+            "description": "(id:17) Gói Khám Tầm Soát Ung Thư (14.500.000 đồng – Nội soi dạ dày, đại tràng gây mê) dành cho nữ giới tập trung vào phát hiện ung thư gan, phổi, dạ dày, đại trực tràng, vú, buồng trứng, cổ tử cung và tuyến giáp. Gói này phù hợp với phụ nữ có lối sống ít vận động, thường xuyên căng thẳng, ăn uống thiếu khoa học hoặc có tiền sử gia đình mắc bệnh ung thư. Những dấu hiệu như rối loạn kinh nguyệt, đau tức ngực, đầy bụng, sút cân nhanh hay xuất hiện khối u bất thường nên được kiểm tra ngay. So với gói tầm soát ung thư cơ bản, gói nâng cao này bổ sung các xét nghiệm chuyên biệt cho nữ (CA 15-3, CA 125, siêu âm tuyến vú) kết hợp cùng nội soi gây mê và chụp CT đa dãy, mang lại độ chính xác cao hơn và lợi ích lớn trong việc phát hiện sớm, theo dõi sức khỏe toàn diện.",
+            "price": 14500000,
+            "services_ids": [
+                6,
+                7,
+                8,
+                9,
+                18,
+                19,
+                20,
+                15,
+                16,
+                17,
+                39,
+                40,
+                41,
+                42,
+                43,
+                44,
+                26,
+                27,
+                30,
+                31,
+                78,
+                32,
+                29,
+                28,
+                82,
+                84,
+                57,
+                58
+            ],
+            "included_package_ids": []
+        },
+        {
+            "id": 18,
+            "name": "GÓI KHÁM TỔNG QUÁT TIÊU CHUẨN THỨ 7",
+            "description": "(id:18) Gói Khám Tổng Quát Tiêu Chuẩn Thứ 7 (3.500.000 đồng) giúp kiểm tra toàn diện sức khỏe tổng quát, từ xét nghiệm máu, chức năng gan thận, tim mạch, đến siêu âm và chụp X-quang. Gói khám phù hợp với những người thường xuyên chịu áp lực công việc, ít vận động, hay sử dụng rượu bia hoặc thuốc lá. Những triệu chứng như mệt mỏi kéo dài, đau tức ngực, rối loạn tiêu hóa hoặc khó ngủ là dấu hiệu nên đi khám. Lợi ích của gói khám là giúp phát hiện sớm các rối loạn chuyển hóa, bệnh tim mạch, gan mật và thận để kịp thời điều chỉnh lối sống hoặc điều trị.",
+            "price": 3500000,
+            "services_ids": [
+                1,
+                7,
+                72,
+                73,
+                8,
+                9,
+                10,
+                11,
+                12,
+                13,
+                14,
+                15,
+                16,
+                74,
+                18,
+                19,
+                20,
+                75,
+                76,
+                77,
+                23,
+                24,
+                35,
+                34,
+                33,
+                26,
+                27,
+                28,
+                29,
+                30
+            ],
+            "included_package_ids": []
+        }
+    ],
+    "services": [
+        {
+            "id": 1,
+            "name": "Bác sĩ khám tổng quát",
+            "in_packages": [
+                1,
+                18
+            ]
+        },
+        {
+            "id": 2,
+            "name": "Bác sĩ khám chuyên khoa thần kinh",
+            "in_packages": [
+                6
+            ]
+        },
+        {
+            "id": 3,
+            "name": "Bác sĩ khám chuyên khoa tim mạch",
+            "in_packages": [
+                6
+            ]
+        },
+        {
+            "id": 4,
+            "name": "Bác sĩ khám chuyên khoa Thận niệu nam khoa",
+            "in_packages": [
+                10
+            ]
+        },
+        {
+            "id": 5,
+            "name": "Bác sĩ khám chuyên khoa cơ xương khớp",
+            "in_packages": [
+                15
+            ]
+        },
+        {
+            "id": 6,
+            "name": "Bác sĩ khám lâm sàng",
+            "in_packages": [
+                8,
+                9,
+                11,
+                13,
+                14,
+                16,
+                17
+            ]
+        },
+        {
+            "id": 7,
+            "name": "Tổng phân tích tế bào máu ngoại vi (bằng máy đếm laser)",
+            "in_packages": [
+                1,
+                6,
+                7,
+                8,
+                9,
+                10,
+                11,
+                13,
+                14,
+                15,
+                16,
+                17,
+                18
+            ]
+        },
+        {
+            "id": 8,
+            "name": "Định lượng Glucose [máu]",
+            "in_packages": [
+                1,
+                6,
+                7,
+                8,
+                9,
+                10,
+                11,
+                13,
+                14,
+                15,
+                16,
+                17,
+                18
+            ]
+        },
+        {
+            "id": 9,
+            "name": "Định lượng HbA1c [máu]",
+            "in_packages": [
+                1,
+                6,
+                7,
+                8,
+                9,
+                11,
+                16,
+                17,
+                18
+            ]
+        },
+        {
+            "id": 10,
+            "name": "Định lượng Cholesterol toàn phần [máu]",
+            "in_packages": [
+                1,
+                6,
+                7,
+                12,
+                15,
+                18
+            ]
+        },
+        {
+            "id": 11,
+            "name": "Định lượng HDL – C [máu]",
+            "in_packages": [
+                1,
+                6,
+                7,
+                12,
+                15,
+                18
+            ]
+        },
+        {
+            "id": 12,
+            "name": "Định lượng LDL – C [máu]",
+            "in_packages": [
+                1,
+                6,
+                7,
+                12,
+                15,
+                18
+            ]
+        },
+        {
+            "id": 13,
+            "name": "Định lượng Triglycerid [máu]",
+            "in_packages": [
+                1,
+                6,
+                7,
+                12,
+                15,
+                18
+            ]
+        },
+        {
+            "id": 14,
+            "name": "Định lượng Acid Uric [máu]",
+            "in_packages": [
+                1,
+                6,
+                7,
+                15,
+                18
+            ]
+        },
+        {
+            "id": 15,
+            "name": "Đo hoạt độ ALT [máu]",
+            "in_packages": [
+                1,
+                6,
+                7,
+                8,
+                9,
+                11,
+                15,
+                16,
+                17,
+                18
+            ]
+        },
+        {
+            "id": 16,
+            "name": "Đo hoạt độ AST [máu]",
+            "in_packages": [
+                1,
+                6,
+                7,
+                8,
+                9,
+                11,
+                15,
+                16,
+                17,
+                18
+            ]
+        },
+        {
+            "id": 17,
+            "name": "Đo hoạt độ GGT [máu]",
+            "in_packages": [
+                1,
+                6,
+                7,
+                8,
+                9,
+                11,
+                15,
+                16,
+                17
+            ]
+        },
+        {
+            "id": 18,
+            "name": "Định lượng Ure [máu]",
+            "in_packages": [
+                1,
+                6,
+                7,
+                8,
+                9,
+                10,
+                11,
+                15,
+                16,
+                17,
+                18
+            ]
+        },
+        {
+            "id": 19,
+            "name": "Định lượng Creatinine [máu]",
+            "in_packages": [
+                1,
+                6,
+                7,
+                8,
+                9,
+                10,
+                11,
+                13,
+                14,
+                15,
+                16,
+                17,
+                18
+            ]
+        },
+        {
+            "id": 20,
+            "name": "Điện giải đồ ( Na+, K+, CL +)",
+            "in_packages": [
+                1,
+                6,
+                7,
+                8,
+                9,
+                10,
+                11,
+                15,
+                16,
+                17,
+                18
+            ]
+        },
+        {
+            "id": 21,
+            "name": "Định lượng sắt huyết thanh [máu]",
+            "in_packages": [
+                1,
+                11,
+                13,
+                14
+            ]
+        },
+        {
+            "id": 22,
+            "name": "Định lượng Ferritin [máu]",
+            "in_packages": [
+                1
+            ]
+        },
+        {
+            "id": 23,
+            "name": "Định lượng FT4 [máu]",
+            "in_packages": [
+                1,
+                18
+            ]
+        },
+        {
+            "id": 24,
+            "name": "Định lượng FT3 [máu]",
+            "in_packages": [
+                1,
+                18
+            ]
+        },
+        {
+            "id": 25,
+            "name": "Định lượng TSH [máu]",
+            "in_packages": [
+                1
+            ]
+        },
+        {
+            "id": 26,
+            "name": "Tổng phân tích nước tiểu (Bằng máy tự động)",
+            "in_packages": [
+                1,
+                6,
+                7,
+                8,
+                9,
+                10,
+                15,
+                16,
+                17,
+                18
+            ]
+        },
+        {
+            "id": 27,
+            "name": "Chụp Xquang ngực thẳng (CR-Tim phổi thẳng)",
+            "in_packages": [
+                1,
+                6,
+                7,
+                8,
+                9,
+                16,
+                17,
+                18
+            ]
+        },
+        {
+            "id": 28,
+            "name": "Điện tim thường",
+            "in_packages": [
+                1,
+                6,
+                7,
+                15,
+                16,
+                17,
+                18
+            ]
+        },
+        {
+            "id": 29,
+            "name": "Siêu âm Doppler tim màu",
+            "in_packages": [
+                1,
+                6,
+                7,
+                16,
+                17,
+                18
+            ]
+        },
+        {
+            "id": 30,
+            "name": "Siêu âm ổ bụng (gan mật, tụy, thận, bàng quang)",
+            "in_packages": [
+                1,
+                6,
+                7,
+                8,
+                9,
+                10,
+                11,
+                13,
+                14,
+                15,
+                16,
+                17,
+                18
+            ]
+        },
+        {
+            "id": 31,
+            "name": "Siêu âm tuyến giáp",
+            "in_packages": [
+                1,
+                8,
+                9,
+                16,
+                17
+            ]
+        },
+        {
+            "id": 32,
+            "name": "Siêu âm đàn hồi mô gan",
+            "in_packages": [
+                1,
+                8,
+                9,
+                16,
+                17
+            ]
+        },
+        {
+            "id": 33,
+            "name": "HBsAg miễn dịch tự động",
+            "in_packages": [
+                2,
+                3,
+                11,
+                18
+            ]
+        },
+        {
+            "id": 34,
+            "name": "HBsAb định lượng",
+            "in_packages": [
+                2,
+                3,
+                11,
+                18
+            ]
+        },
+        {
+            "id": 35,
+            "name": "HBc total miễn dịch tự động",
+            "in_packages": [
+                2,
+                3,
+                11,
+                18
+            ]
+        },
+        {
+            "id": 36,
+            "name": "HBc IgM",
+            "in_packages": [
+                2,
+                3,
+                11
+            ]
+        },
+        {
+            "id": 37,
+            "name": "HCV Ab miễn dịch tự động",
+            "in_packages": [
+                2,
+                3,
+                11
+            ]
+        },
+        {
+            "id": 38,
+            "name": "HBeAg miễn dịch tự động",
+            "in_packages": [
+                2,
+                3,
+                11
+            ]
+        },
+        {
+            "id": 39,
+            "name": "Định lượng AFP [máu]",
+            "in_packages": [
+                2,
+                3,
+                8,
+                9,
+                16,
+                17
+            ]
+        },
+        {
+            "id": 40,
+            "name": "Định lượng CEA [máu]",
+            "in_packages": [
+                2,
+                3,
+                8,
+                9,
+                16,
+                17
+            ]
+        },
+        {
+            "id": 41,
+            "name": "Định lượng CA 19-9 [máu]",
+            "in_packages": [
+                2,
+                3,
+                8,
+                9,
+                16,
+                17
+            ]
+        },
+        {
+            "id": 42,
+            "name": "Định lượng CA 15-3 [máu]",
+            "in_packages": [
+                3,
+                9,
+                17
+            ]
+        },
+        {
+            "id": 43,
+            "name": "Định lượng CA 125 [máu]",
+            "in_packages": [
+                3,
+                9,
+                17
+            ]
+        },
+        {
+            "id": 44,
+            "name": "Định lượng Cyfra 21-1 [máu]",
+            "in_packages": [
+                2,
+                3,
+                8,
+                9,
+                16,
+                17
+            ]
+        },
+        {
+            "id": 45,
+            "name": "Định lượng PSA tự do",
+            "in_packages": [
+                2,
+                8,
+                10,
+                16
+            ]
+        },
+        {
+            "id": 46,
+            "name": "Định lượng PSA toàn phần",
+            "in_packages": [
+                2,
+                8,
+                10,
+                16
+            ]
+        },
+        {
+            "id": 47,
+            "name": "Siêu âm Doppler mạch máu ngoài sọ (hệ mạch cảnh đốt sống)",
+            "in_packages": [
+                2,
+                3,
+                6,
+                7
+            ]
+        },
+        {
+            "id": 48,
+            "name": "Siêu âm Doppler động mạch, tĩnh mạch chi dưới",
+            "in_packages": [
+                2,
+                3,
+                7
+            ]
+        },
+        {
+            "id": 49,
+            "name": "Siêu âm tuyến vú hai bên",
+            "in_packages": [
+                3
+            ]
+        },
+        {
+            "id": 50,
+            "name": "Đo mật độ xương bằng phương pháp DEXA",
+            "in_packages": [
+                2,
+                3
+            ]
+        },
+        {
+            "id": 51,
+            "name": "Khám Tai mũi họng",
+            "in_packages": [
+                2,
+                3
+            ]
+        },
+        {
+            "id": 52,
+            "name": "Chụp cắt lớp vi tính tầm soát toàn thân không tiêm thuốc cản quang (từ 64-128 dãy)",
+            "in_packages": [
+                4,
+                5
+            ]
+        },
+        {
+            "id": 53,
+            "name": "Nội soi thực quản- dạ dày – tá tràng gây mê",
+            "in_packages": [
+                4,
+                5
+            ]
+        },
+        {
+            "id": 54,
+            "name": "Nội soi đại trực tràng toàn bộ ống mềm có dùng thuốc gây mê",
+            "in_packages": [
+                4,
+                5
+            ]
+        },
+        {
+            "id": 55,
+            "name": "Chụp cộng hưởng từ não-mạch não không tiêm chất tương phản",
+            "in_packages": [
+                6
+            ]
+        },
+        {
+            "id": 56,
+            "name": "Chụp cắt lớp vi tính tính điểm vôi hóa mạch vành (64-128 dãy)",
+            "in_packages": [
+                7
+            ]
+        },
+        {
+            "id": 57,
+            "name": "Chụp cắt lớp vi tính lồng ngực không tiêm thuốc cản quang (từ 64-128 dãy)",
+            "in_packages": [
+                8,
+                9,
+                16,
+                17
+            ]
+        },
+        {
+            "id": 58,
+            "name": "Chụp cắt lớp vi tính sọ não không tiêm thuốc cản quang (từ 64-128 dãy)",
+            "in_packages": [
+                8,
+                9,
+                16,
+                17
+            ]
+        },
+        {
+            "id": 59,
+            "name": "Siêu âm tinh hoàn hai bên (Siêu âm Doppler mạch máu bìu)",
+            "in_packages": [
+                10
+            ]
+        },
+        {
+            "id": 60,
+            "name": "Định lượng Testosterol [máu]",
+            "in_packages": [
+                10
+            ]
+        },
+        {
+            "id": 61,
+            "name": "Định lượng FSH [máu]",
+            "in_packages": [
+                10
+            ]
+        },
+        {
+            "id": 62,
+            "name": "Định lượng LH [máu]",
+            "in_packages": [
+                10
+            ]
+        },
+        {
+            "id": 63,
+            "name": "Siêu âm đàn hồi mô (gan, tuyến vú,…)",
+            "in_packages": [
+                11
+            ]
+        },
+        {
+            "id": 64,
+            "name": "Test hơi thở tìm vi khuẩn HP bằng C13, C14",
+            "in_packages": [
+                13
+            ]
+        },
+        {
+            "id": 65,
+            "name": "Nội soi can thiệp – làm clo test chẩn đoán nhiễm H.Pylori",
+            "in_packages": [
+                14
+            ]
+        },
+        {
+            "id": 66,
+            "name": "Nội soi đại trực tràng toàn bộ ống mềm không sinh thiết",
+            "in_packages": [
+                14
+            ]
+        },
+        {
+            "id": 67,
+            "name": "VS (Tốc độ máu lắng)",
+            "in_packages": [
+                15
+            ]
+        },
+        {
+            "id": 68,
+            "name": "CRP định lượng",
+            "in_packages": [
+                15
+            ]
+        },
+        {
+            "id": 69,
+            "name": "Định lượng CRP hs",
+            "in_packages": [
+                7
+            ]
+        },
+        {
+            "id": 70,
+            "name": "Chụp XQ ngực thẳng (CR- Tim phổi thẳng)",
+            "in_packages": [
+                15
+            ]
+        },
+        {
+            "id": 71,
+            "name": "Chụp XQ khớp (theo chỉ định bác sĩ)",
+            "in_packages": [
+                15
+            ]
+        },
+        {
+            "id": 72,
+            "name": "Thời gian prothrombin (PT: Prothrombin Time), (Các tên khác: TQ; Tỷ lệ Prothrombin) bằng máy bán tự động",
+            "in_packages": [
+                18
+            ]
+        },
+        {
+            "id": 73,
+            "name": "Thời gian thromboplastin một phần hoạt hóa (APTT: Activated Partial thromboplastin time), (tên khác: TCK) bằng máy tự động",
+            "in_packages": [
+                18
+            ]
+        },
+        {
+            "id": 74,
+            "name": "Định lượng Albumin [Máu]",
+            "in_packages": [
+                18
+            ]
+        },
+        {
+            "id": 75,
+            "name": "Định lượng Bilirubin trực tiếp [Máu]",
+            "in_packages": [
+                18
+            ]
+        },
+        {
+            "id": 76,
+            "name": "Định lượng Bilirubin toàn phần [Máu]",
+            "in_packages": [
+                18
+            ]
+        },
+        {
+            "id": 77,
+            "name": "Định lượng Canxi toàn phần [Máu]",
+            "in_packages": [
+                18
+            ]
+        },
+        {
+            "id": 78,
+            "name": "Siêu âm tuyến vú",
+            "in_packages": [
+                9,
+                17
+            ]
+        },
+        {
+            "id": 79,
+            "name": "Khám thêm chuyên khoa Tim Mạch",
+            "in_packages": [
+                7
+            ]
+        },
+        {
+            "id": 80,
+            "name": "Nội soi đại trực tràng toàn bộ ống mềm có sinh thiết",
+            "in_packages": [
+                8,
+                9
+            ]
+        },
+        {
+            "id": 81,
+            "name": "Nội soi thực quản- dạ dày – tá tràng toàn bộ ống mềm có sinh thiết",
+            "in_packages": [
+                8,
+                9
+            ]
+        },
+        {
+            "id": 82,
+            "name": "Nội soi thực quản- dạ dày – tá tràng toàn bộ ống mềm có sinh thiết (gây mê)",
+            "in_packages": [
+                16,
+                17
+            ]
+        },
+        {
+            "id": 83,
+            "name": "Định lượng Ferritin",
+            "in_packages": [
+                11,
+                13,
+                14
+            ]
+        },
+        {
+            "id": 84,
+            "name": "Nội soi đại trực tràng toàn bộ ống mềm có sinh thiết (gây mê)",
+            "in_packages": [
+                16,
+                17
+            ]
+        }
+    ]
+}
