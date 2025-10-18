@@ -1,7 +1,7 @@
 import json
 from typing import List, Dict
 
-with open("updated_services.json", 'r', encoding='utf-8') as f:
+with open("service_agent/updated_services.json", 'r', encoding='utf-8') as f:
     DATA = json.load(f)
 
 def load_packages(data) -> Dict[int, Dict]:

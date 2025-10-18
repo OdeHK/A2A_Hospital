@@ -62,6 +62,7 @@ def main(host, port):
             "/.well-known/jwks.json", notification_sender_auth.handle_jwks_endpoint, methods=["GET"]
         )
 
+        
         logger.info(f"Starting server on {host}:{port}")
         server.start()
     except MissingAPIKeyError as e:
