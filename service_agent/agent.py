@@ -186,7 +186,7 @@ def answer_with_retrival(state:MessagesState):
 
     sys_msg = ANSWER_WITH_SERVICE_INSTRUCTION.format(selected_packages=selected_packages)
 
-    llm_struct = llm_qwen3_32b_wr.with_structured_output(ResponseFormat,method="json_schema")
+    llm_struct = llm_llama_8b.with_structured_output(ResponseFormat,method="json_schema")
     response = llm_struct.invoke([SystemMessage(content=sys_msg)] + state["messages"])
 
     # new_memory = state["messages"] + [response]  # state["messages"] lúc này chỉ là summary
@@ -197,7 +197,7 @@ def answer_with_retrival(state:MessagesState):
 
 def answer_without_retrival(state:MessagesState):
     sys_msg = ANSWER_WITHOUT_SERVICE_INSTRUCTION
-    llm_struct = llm_qwen3_32b_wr.with_structured_output(ResponseFormat,method="json_schema")
+    llm_struct = llm_llama_8b.with_structured_output(ResponseFormat,method="json_schema")
     response = llm_struct.invoke([SystemMessage(content=sys_msg)] + state["messages"])
 
     # new_memory = state["messages"] + [response]  # state["messages"] lúc này chỉ là summary
