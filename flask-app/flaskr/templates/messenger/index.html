@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simple Messenger</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles/messenger.css') }}">
+</head>
+<body>
+  <div class="chat-container">
+    <div class="chat-header">💬 My Messenger</div>
+
+    <div class="chat-messages" id="chat-messages">
+      <!-- Messages will appear here -->
+    </div>
+
+    <div class="chat-input">
+      <input type="text" id="messageInput" placeholder="Type a message..." />
+      <button id="sendBtn">Send</button>
+    </div>
+  </div>
+  <script type="text/javascript">
+    settings = {{data|tojson}};
+  </script>
+  <script type="module" src="{{ url_for('static', filename='js/messenger.js') }}"></script>
+  
+</body>
+</html>

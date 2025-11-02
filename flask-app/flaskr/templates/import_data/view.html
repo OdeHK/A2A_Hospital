@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Danh sách bác sĩ</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles/import_data.css') }}">
+    <!-- <style>
+        body {
+            background-color: #f3f9f5;
+            font-family: 'Segoe UI', sans-serif;
+        }
+
+        .navbar {
+            background-color: #2a9d8f !important;
+        }
+
+        .navbar-brand {
+            color: white !important;
+            font-weight: bold;
+            font-size: 1.3rem;
+        }
+
+        h2 {
+            color: #264653;
+            font-weight: 600;
+        }
+
+        .card-doctor {
+            border: none;
+            border-radius: 16px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            background-color: #ffffff;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .card-doctor:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+        }
+
+        .card-body h5 {
+            color: #2a9d8f;
+            font-weight: 600;
+        }
+
+        .card-body p {
+            color: #264653;
+            margin-bottom: 4px;
+        }
+
+        .btn-back {
+            background-color: #2a9d8f;
+            color: white;
+            border: none;
+        }
+
+        .btn-back:hover {
+            background-color: #21867a;
+        }
+
+        .no-data {
+            text-align: center;
+            color: #6c757d;
+            font-style: italic;
+        }
+    </style> -->
+</head>
+
+<script>
+    // Tự động ẩn alert sau 3s
+    document.addEventListener("DOMContentLoaded", function () {
+        const alert = document.querySelector(".alert");
+        if (alert) {
+            setTimeout(() => {
+                alert.classList.add("fade-out");
+                setTimeout(() => alert.remove(), 500); // remove khỏi DOM
+            }, 3000);
+        }
+    });
+</script>
+
+
+<body>
+    <!-- 🌿 Navbar -->
+    <nav class="navbar navbar-expand-lg mb-4 shadow-sm">
+        <div class="container-fluid px-4">
+            <a class="navbar-brand" href="/">Doctor Admin Dashboard</a>
+            <div class="d-flex">
+                <a href="/" class="btn btn-light btn-sm">← Quay lại</a>
+            </div>
+        </div>
+    </nav>
+    
+    <body class="view-page">
+    
+
+    
+    <div class="container">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2>Danh sách bác sĩ</h2>
+            <a href="/" class="btn btn-back">Thêm bác sĩ mới</a>
+        </div>
+
+        <!-- 📊 Dashboard Stats -->
+        <div class="row text-center mb-4">
+            <div class="col-md-4">
+            <div class="card shadow-sm border-0 p-3" style="background-color: #eafaf1;">
+                <h5 class="text-success mb-0">{{ total_doctors }}</h5>
+                <small class="text-muted">Tổng số bác sĩ</small>
+            </div>
+            </div>
+            <div class="col-md-4">
+            <div class="card shadow-sm border-0 p-3" style="background-color: #fef9e7;">
+                <h5 class="text-warning mb-0">{{ departments }}</h5>
+                <small class="text-muted">Phòng ban khác nhau</small>
+            </div>
+            </div>
+            <div class="col-md-4">
+            <div class="card shadow-sm border-0 p-3" style="background-color: #e8f4fd;">
+                <h5 class="text-primary mb-0">{{ hospitals }}</h5>
+                <small class="text-muted">Bệnh viện khác nhau</small>
+            </div>
+            </div>
+        </div>
+        
+        <!-- 🔍 Search + Filter -->
+        <div class="d-flex flex-wrap justify-content-center gap-3 mb-4">
+            <input type="text" id="searchInput" class="form-control w-50 shadow-sm"
+                placeholder="🔍 Tìm bác sĩ theo tên, phòng ban hoặc bệnh viện...">
+        
+            <select id="departmentFilter" class="form-select w-auto shadow-sm">
+            <option value="">-- Lọc theo phòng ban --</option>
+            {% for doc in doctors %}
+                <option value="{{ doc.department }}">{{ doc.department }}</option>
+            {% endfor %}
+            </select>
+        
+            <select id="hospitalFilter" class="form-select w-auto shadow-sm">
+            <option value="">-- Lọc theo bệnh viện --</option>
+            {% for doc in doctors %}
+                <option value="{{ doc.hospital }}">{{ doc.hospital }}</option>
+            {% endfor %}
+            </select>
+        </div>
+
+        <!-- ✅ Flash thông báo -->
+        {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                {{ messages[0] }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        {% endif %}
+        {% endwith %}
+
+        <!-- 🩺 Hiển thị danh sách bác sĩ -->
+        {% if doctors %}
+        <div class="row">
+            {% for doc in doctors %}
+            <div class="col-md-4 mb-4">
+              <div class="card card-doctor h-100 position-relative"
+                   data-note="{{ doc.note or '' }}"
+                   data-image="{{ doc.image_url if doc.image_url else '' }}">
+              
+                <!-- 🔧 Nút hành động (ẩn nhẹ, hiện khi hover) -->
+                <div class="action-buttons position-absolute top-0 end-0 mt-2 me-2 d-flex gap-2">
+                  <button class="btn btn-light btn-sm p-1 shadow-sm btn-edit" data-id="{{ doc.id }}" data-bs-toggle="tooltip" title="Edit">
+                    <i class="bi bi-pencil"></i>
+                  </button>
+                  <button class="btn btn-light btn-sm p-1 shadow-sm btn-delete" data-id="{{ doc.id }}" data-bs-toggle="tooltip" title="Remove">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </div>
+              
+                <!-- 🩺 Nội dung card -->
+                <div class="card-body">
+                  <h5 class="card-title">{{ doc.name }}</h5>
+                  <p><strong>Tuổi:</strong> {{ doc.age }}</p>
+                  <p><strong>Phòng ban:</strong> {{ doc.department }}</p>
+                  <p><strong>Bệnh viện:</strong> {{ doc.hospital }}</p>
+                </div>
+              </div>
+            </div>
+            {% endfor %}                        
+        </div>
+        {% else %}
+        <p class="no-data">Hiện chưa có dữ liệu bác sĩ nào được lưu.</p>
+        {% endif %}
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script type="module" src="{{ url_for('static', filename='js/importData.js') }}"></script>
+    <!--Search realtime-->
+    <!-- <script>
+        document.getElementById("searchInput").addEventListener("keyup", function() {
+          const searchText = this.value.toLowerCase();
+          const cards = document.querySelectorAll(".card-doctor");
+        
+          cards.forEach(card => {
+            const text = card.innerText.toLowerCase();
+            card.parentElement.style.display = text.includes(searchText) ? "block" : "none";
+          });
+        });
+        </script> -->
+
+    <!--Filter-->
+    <!-- <script>
+        document.addEventListener("DOMContentLoaded", function() {
+          const searchInput = document.getElementById("searchInput");
+          const deptFilter = document.getElementById("departmentFilter");
+          const hospFilter = document.getElementById("hospitalFilter");
+          const cards = document.querySelectorAll(".card-doctor");
+        
+          // 🧹 Loại bỏ giá trị trùng trong dropdown
+          function removeDuplicateOptions(select) {
+            const seen = new Set();
+            Array.from(select.options).forEach(opt => {
+              if (seen.has(opt.value) && opt.value !== "") opt.remove();
+              else seen.add(opt.value);
+            });
+          }
+          removeDuplicateOptions(deptFilter);
+          removeDuplicateOptions(hospFilter);
+        
+          function filterCards() {
+            const searchText = searchInput.value.toLowerCase();
+            const deptValue = deptFilter.value.toLowerCase();
+            const hospValue = hospFilter.value.toLowerCase();
+        
+            cards.forEach(card => {
+              const text = card.innerText.toLowerCase();
+              const matchSearch = text.includes(searchText);
+              const matchDept = deptValue === "" || text.includes(deptValue);
+              const matchHosp = hospValue === "" || text.includes(hospValue);
+        
+              card.parentElement.style.display = (matchSearch && matchDept && matchHosp) ? "block" : "none";
+            });
+          }
+        
+          searchInput.addEventListener("keyup", filterCards);
+          deptFilter.addEventListener("change", filterCards);
+          hospFilter.addEventListener("change", filterCards);
+        });
+        </script>
+
+    <script>
+        // Kích hoạt Bootstrap tooltip
+        const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+        [...tooltipTriggerList].map(el => new bootstrap.Tooltip(el));
+      </script> -->
+
+    <!-- Edit & Delete Functionality -->
+    <!-- <script>
+        document.addEventListener("DOMContentLoaded", function() {
+        const editButtons = document.querySelectorAll(".btn-edit");
+        const deleteButtons = document.querySelectorAll(".btn-delete");
+        const editForm = document.getElementById("editForm");
+        const confirmModal = document.getElementById("confirmDeleteModal");
+        const confirmDeleteBtn = document.getElementById("confirmDeleteBtn");
+        let deleteRow = null; // lưu id cần xóa
+        
+        // 📝 EDIT - mở modal chỉnh sửa
+        editButtons.forEach(btn => {
+            btn.addEventListener("click", () => {
+            const card = btn.closest(".card-doctor");
+            const name = card.querySelector(".card-title").innerText;
+            const age = card.querySelector("p:nth-of-type(1)").innerText.replace("Tuổi: ", "");
+            const dept = card.querySelector("p:nth-of-type(2)").innerText.replace("Phòng ban: ", "");
+            const hosp = card.querySelector("p:nth-of-type(3)").innerText.replace("Bệnh viện: ", "");
+        
+            document.getElementById("editRow").value = btn.dataset.id;
+            document.getElementById("editName").value = name;
+            document.getElementById("editAge").value = age;
+            document.getElementById("editDepartment").value = dept;
+            document.getElementById("editHospital").value = hosp;
+        
+            const modal = new bootstrap.Modal(document.getElementById("editModal"));
+            modal.show();
+            });
+        });
+        
+        // 🗑️ DELETE - mở modal xác nhận custom
+        deleteButtons.forEach(btn => {
+            btn.addEventListener("click", () => {
+            deleteRow = btn.dataset.id;
+            const modal = new bootstrap.Modal(confirmModal);
+            modal.show();
+            });
+        });
+        
+        // ✅ Khi nhấn nút Xóa trong popup
+        confirmDeleteBtn.addEventListener("click", () => {
+        if (deleteRow) {
+            fetch(`/delete/${deleteRow}`, { method: "POST" })
+            .then(() => {
+                const modal = bootstrap.Modal.getInstance(confirmModal);
+                modal.hide();
+
+                // 🔔 Hiện toast thông báo
+                const toastEl = document.getElementById("deleteToast");
+                const toast = new bootstrap.Toast(toastEl, { delay: 3000 });
+                toast.show();
+
+                // Reload sau 3.2s để đồng bộ dữ liệu mới
+                setTimeout(() => window.location.reload(), 3200);
+            });
+        }
+        });
+    });
+        </script> -->
+    
+    <!-- Doctor Detail Script -->
+    <!-- <script>
+        document.addEventListener("DOMContentLoaded", function() {
+          const nameElements = document.querySelectorAll(".card-doctor .card-title");
+        
+          nameElements.forEach(el => {
+            el.style.cursor = "pointer";
+            el.addEventListener("click", () => {
+              const card = el.closest(".card-doctor");
+        
+              // Lấy dữ liệu trong card
+              const name = el.innerText;
+              const age = card.querySelector("p:nth-of-type(1)").innerText.replace("Tuổi: ", "");
+              const department = card.querySelector("p:nth-of-type(2)").innerText.replace("Phòng ban: ", "");
+              const hospital = card.querySelector("p:nth-of-type(3)").innerText.replace("Bệnh viện: ", "");
+              const note = card.dataset.note || "Chưa có ghi chú.";
+              let image = card.dataset.image ? card.dataset.image.trim() : "";
+              if (!image || image.toLowerCase() === "none" || image === "null") {
+                image = "/static/images/default.jpg";
+                }
+              document.getElementById("detailImage").src = image;
+
+        
+              // Gán dữ liệu vào modal
+              document.getElementById("detailImage").src = image;
+              document.getElementById("detailName").innerText = `${name}, ${age} tuổi`;
+              document.getElementById("detailDepartment").innerText = `🩺 ${department}`;
+              document.getElementById("detailHospital").innerText = `🏥 ${hospital}`;
+              document.getElementById("detailNote").innerText = note;
+        
+              // Mở modal
+              const modal = new bootstrap.Modal(document.getElementById("doctorDetailModal"));
+              modal.show();
+            });
+          });
+        });
+        </script> -->
+        
+
+    <!-- 📝 Modal Edit Doctor -->
+    <div class="modal fade" id="editModal" tabindex="-1" aria-labelledby="editModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow" style="background-color: #f3f9f5; border-radius: 16px;">
+            <form id="editForm" method="POST" action="/config/update">
+            <div class="modal-header border-0" style="background-color: #2a9d8f; color: white; border-top-left-radius: 16px; border-top-right-radius: 16px;">
+                <h5 class="modal-title fw-semibold">Chỉnh sửa thông tin bác sĩ</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+    
+            <div class="modal-body px-4 py-3">
+                <input type="hidden" id="editRow" name="row">
+                <div class="mb-3">
+                <label class="form-label text-success">Họ và tên</label>
+                <input type="text" class="form-control shadow-sm border-0" style="border-radius: 10px;" id="editName" name="name" required>
+                </div>
+                <div class="mb-3">
+                <label class="form-label text-success">Tuổi</label>
+                <input type="number" class="form-control shadow-sm border-0" style="border-radius: 10px;" id="editAge" name="age" required>
+                </div>
+                <div class="mb-3">
+                <label class="form-label text-success">Phòng ban</label>
+                <input type="text" class="form-control shadow-sm border-0" style="border-radius: 10px;" id="editDepartment" name="department" required>
+                </div>
+                <div class="mb-3">
+                <label class="form-label text-success">Bệnh viện</label>
+                <input type="text" class="form-control shadow-sm border-0" style="border-radius: 10px;" id="editHospital" name="hospital" required>
+                </div>
+            </div>
+    
+            <div class="modal-footer border-0">
+                <button type="submit" class="btn text-white px-4" style="background-color: #2a9d8f;">Lưu thay đổi</button>
+            </div>
+            </form>
+        </div>
+        </div>
+    </div>
+    
+    
+    <!-- 🗑️ Modal Confirm Delete -->
+    <div class="modal fade" id="confirmDeleteModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow" style="background-color: #f3f9f5; border-radius: 16px;">
+            <div class="modal-body text-center py-4">
+            <div class="mb-3">
+                <i class="bi bi-exclamation-triangle" style="font-size: 2rem; color: #e74c3c;"></i>
+            </div>
+            <h5 class="fw-semibold" style="color: #264653;">Xác nhận xóa bác sĩ?</h5>
+            <p class="text-muted mb-4">Hành động này sẽ không thể hoàn tác.</p>
+            <div class="d-flex justify-content-center gap-3">
+                <button type="button" class="btn px-4" style="background-color: #b7e4c7; color: #264653; border: none;" data-bs-dismiss="modal">Hủy</button>
+                <button id="confirmDeleteBtn" type="button" class="btn px-4 text-white" style="background-color: #e74c3c; border: none;">Xóa</button>
+            </div>
+            </div>
+        </div>
+        </div>
+    </div>
+
+    <!-- ✅ Toast thông báo -->
+    <div class="position-fixed top-0 end-0 p-3" style="z-index: 1080">
+        <div id="deleteToast" class="toast align-items-center text-white border-0" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="d-flex">
+            <div class="toast-body fw-semibold">
+            ✅ Đã xóa thông tin bác sĩ thành công!
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+        </div>
+    </div>
+
+    <!-- 🩺 Modal Doctor Detail -->
+    <div class="modal fade" id="doctorDetailModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 18px; background-color: #f3f9f5;">
+            <div class="modal-body text-center py-4 px-4">
+            <div class="position-relative d-inline-block mb-3">
+                <img id="detailImage" src="{{ url_for('static', filename='image/default.jpg') }}" class="rounded-circle shadow" width="120" height="120" style="object-fit: cover; border: 4px solid #b7e4c7;">
+            </div>
+            <h4 id="detailName" class="fw-semibold text-dark mb-1"></h4>
+            <p id="detailDepartment" class="text-secondary mb-1"></p>
+            <p id="detailHospital" class="text-secondary mb-3"></p>
+            <div id="detailNote" class="border-top pt-3 text-start small text-dark" style="white-space: pre-line; line-height: 1.6;"></div>
+    
+            <div class="mt-4">
+                <button type="button" class="btn px-4 py-2" data-bs-dismiss="modal" style="background-color:#2a9d8f;color:white;border:none;border-radius:10px;">Đóng</button>
+            </div>
+            </div>
+        </div>
+        </div>
+    </div>
+    
+</body>
+</html>

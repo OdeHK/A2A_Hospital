@@ -1,0 +1,58 @@
+body {
+    background-color: #f3f9f5;
+    font-family: 'Segoe UI', sans-serif;
+}
+
+.navbar {
+    background-color: #2a9d8f !important;
+}
+
+.navbar-brand {
+    color: white !important;
+    font-weight: bold;
+    font-size: 1.3rem;
+}
+
+h2 {
+    color: #264653;
+    font-weight: 600;
+}
+
+.card-doctor {
+    border: none;
+    border-radius: 16px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    background-color: #ffffff;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card-doctor:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+}
+
+.card-body h5 {
+    color: #2a9d8f;
+    font-weight: 600;
+}
+
+.card-body p {
+    color: #264653;
+    margin-bottom: 4px;
+}
+
+.btn-back {
+    background-color: #2a9d8f;
+    color: white;
+    border: none;
+}
+
+.btn-back:hover {
+    background-color: #21867a;
+}
+
+.no-data {
+    text-align: center;
+    color: #6c757d;
+    font-style: italic;
+}
