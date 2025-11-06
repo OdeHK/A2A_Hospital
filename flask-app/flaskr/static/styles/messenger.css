@@ -45,6 +45,11 @@ height: 100vh;
     max-width: 70%;
 }
 
+.message.audio-response {
+    padding: 10px 15px;
+    max-width: 100%;
+}
+
 .sent {
     background: #0084ff;
     color: white;
