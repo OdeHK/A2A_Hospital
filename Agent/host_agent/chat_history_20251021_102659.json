@@ -1,0 +1,38 @@
+[
+  {
+    "user": "xin chào",
+    "agent": "📎 Chào bạn, tôi có thể giúp gì cho sức khỏe của bạn hôm nay?",
+    "timestamp": "2025-10-21T10:24:12.957200",
+    "events_count": 4
+  },
+  {
+    "user": "bạn là agent gì ?",
+    "agent": "📎 Tôi là một trợ lý y tế thông minh, có nhiệm vụ điều phối các agent chuyên biệt để hỗ trợ bạn về các vấn đề sức khỏe. Tôi có thể giúp bạn chẩn đoán sơ bộ, đặt lịch hẹn khám bệnh, hoặc gợi ý các dịch vụ y tế phù hợp.",
+    "timestamp": "2025-10-21T10:24:26.335223",
+    "events_count": 4
+  },
+  {
+    "user": "Tôi bị đau bụng, nôn ói và sốt 3 ngày nay thì bị bệnh gì?",
+    "agent": "📎 Dựa trên các triệu chứng bạn mô tả là đau bụng, nôn ói và sốt kéo dài 3 ngày, theo chẩn đoán sơ bộ, có thể bạn đang mắc Hội chứng ruột kích thích (IBS). Lý do là các triệu chứng của bạn phù hợp với biểu hiện của IBS, đặc biệt khi không tìm thấy các tổn thương thực thể ở cơ quan.\n\nTuy nhiên, đây chỉ là chẩn đoán sơ bộ. Để có kết quả chính xác và điều trị phù hợp, bạn nên đến gặp bác sĩ để được thăm khám và kiểm tra cụ thể.\n\nBạn có muốn tôi hỗ trợ đặt lịch hẹn khám bệnh không?",
+    "timestamp": "2025-10-21T10:24:48.678326",
+    "events_count": 4
+  },
+  {
+    "user": "Kiểm tra sức khỏe tổng quát có những gói nào?",
+    "agent": "📎 Để tôi có thể tư vấn gói kiểm tra sức khỏe tổng quát phù hợp nhất cho bạn, bạn có thể cho tôi biết thêm về:\n\n*   **Độ tuổi** của bạn?\n*   **Giới tính** của bạn?\n*   Bạn có **triệu chứng** cụ thể nào không, hoặc bạn muốn tập trung kiểm tra vào **lĩnh vực nào** (ví dụ: tim mạch, tiêu hóa, hay tầm soát ung thư)?",
+    "timestamp": "2025-10-21T10:25:11.307979",
+    "events_count": 4
+  },
+  {
+    "user": "21 tuổi, giới tính nam  và chỉ muốn khám tổng quát",
+    "agent": "📎 Chào bạn, tôi sẽ giúp bạn tìm gói khám sức khỏe tổng quát phù hợp nhất cho nam giới 21 tuổi.\n\nBạn đã nói chỉ muốn khám tổng quát, vậy bạn có muốn tập trung vào bất kỳ vấn đề sức khỏe cụ thể nào không, hay chỉ cần một gói cơ bản để kiểm tra tình trạng chung của cơ thể?",
+    "timestamp": "2025-10-21T10:25:40.561040",
+    "events_count": 4
+  },
+  {
+    "user": "gói khám tổng quát có những gói nào ",
+    "agent": "📎 Chào bạn, với nhu cầu khám tổng quát và thông tin bạn là nam giới 21 tuổi, tôi xin giới thiệu **Gói khám sức khỏe tổng quát cơ bản** với giá **4.000.000 VND**.\n\nGói này bao gồm các dịch vụ như:\n*   Khám tổng quát với bác sĩ.\n*   Phân tích tế bào máu.\n*   Định lượng đường huyết, HbA1c.\n*   Các chỉ số mỡ máu (Cholesterol, HDL-C, LDL-C, Triglycerid).\n*   Acid Uric, men gan ALT.\n*   Và 17 dịch vụ khác.\n\nGói này đặc biệt phù hợp nếu bạn ít vận động, có tiền sử gia đình mắc bệnh tim mạch, tiểu đường, rối loạn mỡ máu, hoặc thường xuyên mệt mỏi, khó ngủ.\n\nBạn có muốn tìm hiểu thêm chi tiết về các dịch vụ trong gói này, hoặc có muốn đặt lịch khám không ạ?",
+    "timestamp": "2025-10-21T10:26:15.846014",
+    "events_count": 4
+  }
+]

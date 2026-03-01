@@ -11,7 +11,7 @@ app.config.from_mapping(
 )
 
 # a simple page that says hello
-app.config["SQLALCHEMY_DATABASE_URI"] =  "mysql+pymysql://root:password@localhost/hopitalagent"
+app.config["SQLALCHEMY_DATABASE_URI"] =  "mysql+pymysql://root:31012002@localhost/hopitalagent"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"]  =  False
 app.config['UPLOAD_FOLDER'] =  UPLOAD_FOLDER
 

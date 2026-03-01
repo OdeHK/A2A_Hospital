@@ -30,3 +30,7 @@ def createVoiceChat():
         'status' : False,
         'message' : 'Can not create file speed'
     }
+
+@bp.route('/speed-chat' , methods = ['GET'])
+def speedChat():
+    return render_template('messenger/voice_page.html')
