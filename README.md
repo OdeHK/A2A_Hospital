@@ -93,16 +93,18 @@ Frontend
 A2A_Hospital
 
 flask-app/
-    |--blueprints/
-    |--models/
-    |--services/
-    |--static/
-    |--templates/
+│
+├── blueprints/
+├── models/
+├── services/
+├── static/
+└── templates/
 
 Agent/
-    |--agents/
-    |--host_agent/
-    |--common/
+│
+├── agents/
+├── host_agent/
+└── common/
 
 frontend/
 docs/
